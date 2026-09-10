@@ -1,0 +1,10 @@
+[project]
+name = "optimizer-agent"
+version = "0.1.0"
+description = "OpenAI 호환 API에 연결하는 LangChain 에이전트"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "langchain>=1.4.0",
+    "langchain-openai>=1.6.2",
+]
