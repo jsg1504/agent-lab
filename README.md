@@ -2,10 +2,13 @@
 
 OpenAI 호환 API에 연결하는 LangChain 에이전트. 엔드포인트만 바꾸면 로컬 Ollama, vLLM, LM Studio, llama.cpp, OpenAI 본체 어디에든 붙는다.
 
+에이전트는 둘이다. 일반 어시스턴트(`agent`)와, 웹과 로컬 문서를 근거로 답하는 조사 담당(`researcher`).
+
 ## 요구 사항
 
 - Python 3.13, [uv](https://docs.astral.sh/uv/)
 - OpenAI 호환 엔드포인트 하나. 기본값은 로컬 [Ollama](https://ollama.com)(`http://localhost:11434/v1`)를 가리킨다.
+- `researcher`의 웹 검색을 쓰려면 외부 네트워크 접속이 필요하다. 검색 API 키는 필요 없다.
 
 ## 설치
 
@@ -38,7 +41,7 @@ uv run researcher "이 프로젝트에서 LLM 연결 설정은 어디서 하지?
 
 ## 설정
 
-`.env` 파일 또는 환경 변수로 설정한다. 셋 다 선택 사항이다.
+`.env` 파일 또는 환경 변수로 설정한다. 모두 선택 사항이다.
 
 ```bash
 cp .env.example .env
@@ -80,7 +83,7 @@ agents/
   assistant.py      일반 어시스턴트
   researcher.py     조사 담당
 tools/
-  __init__.py       TOOLS / RESEARCH_TOOLS 집계
+  __init__.py       TOOLS(assistant용) / RESEARCH_TOOLS(researcher용) 집계
   clock.py          get_current_time
   files.py          list_files
   web.py            web_search, fetch_page
