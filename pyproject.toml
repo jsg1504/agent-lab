@@ -16,6 +16,7 @@ dependencies = [
 [project.scripts]
 agent = "cli:main"
 researcher = "cli:researcher"
+coder = "cli:coder"
 
 [build-system]
 requires = ["hatchling"]

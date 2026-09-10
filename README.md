@@ -2,7 +2,7 @@
 
 OpenAI 호환 API에 연결하는 LangChain 에이전트. 엔드포인트만 바꾸면 로컬 Ollama, vLLM, LM Studio, llama.cpp, OpenAI 본체 어디에든 붙는다.
 
-에이전트는 둘이다. 일반 어시스턴트(`agent`)와, 웹과 로컬 문서를 근거로 답하는 조사 담당(`researcher`).
+에이전트는 셋이다. 일반 어시스턴트(`agent`), 웹과 로컬 문서를 근거로 답하는 조사 담당(`researcher`), 파일을 고치고 명령을 실행하는 코딩 담당(`coder`).
 
 ## 요구 사항
 
@@ -39,6 +39,15 @@ uv run researcher "LangChain의 create_agent는 어떤 인자를 받아?"
 uv run researcher "이 프로젝트에서 LLM 연결 설정은 어디서 하지?"
 ```
 
+코딩 담당은 `WORKSPACE_ROOT` 안에서 파일을 읽고 고치고 셸 명령을 실행한다.
+
+```bash
+WORKSPACE_ROOT=~/some/project uv run coder "test_calc.py가 실패한다. 원인을 찾아 고쳐줘."
+```
+
+> `coder`는 파일을 덮어쓰고 셸 명령을 실행한다. 되돌릴 수 있는 곳(버전 관리 중인 디렉터리)에서 쓰는 편이 안전하다.
+> 파일 도구는 `WORKSPACE_ROOT` 밖을 거부하지만, `run_command`는 셸이라 그 경계가 적용되지 않는다.
+
 ## 설정
 
 `.env` 파일 또는 환경 변수로 설정한다. 모두 선택 사항이다.
@@ -55,6 +64,7 @@ cp .env.example .env
 | `OPENAI_MODEL` | `qwen3.5:9b` | 모델 이름 |
 | `OPENAI_API_KEY` | (없음) | 인증이 필요한 서버에서만 지정한다. 비워 두면 자리 표시자가 들어간다 |
 | `DOCS_ROOT` | `.` | researcher가 조사할 로컬 디렉터리 |
+| `WORKSPACE_ROOT` | `.` | coder가 파일을 고치고 명령을 실행할 디렉터리 |
 
 연결 예시:
 
@@ -82,21 +92,32 @@ agents/
   base.py           build() / ask() 공통
   assistant.py      일반 어시스턴트
   researcher.py     조사 담당
+  coder.py          코딩 담당
 tools/
-  __init__.py       TOOLS(assistant용) / RESEARCH_TOOLS(researcher용) 집계
+  __init__.py       TOOLS / RESEARCH_TOOLS / CODING_TOOLS 집계
   clock.py          get_current_time
   files.py          list_files
   web.py            web_search, fetch_page
   docs.py           list_docs, search_docs, read_doc
+  workspace.py      WORKSPACE_ROOT와 경로 봉쇄 (code/shell 공용)
+  code.py           read_file, edit_file, write_file, list_dir, glob_files, grep_files
+  shell.py          run_command
 ```
 
 ## 도구 추가하기
 
 1. `tools/`에 모듈을 만들고 `@tool` 함수를 작성한다.
-2. `tools/__init__.py`에서 import 한 뒤 `TOOLS` 또는 `RESEARCH_TOOLS`에 추가한다.
+2. `tools/__init__.py`에서 import 한 뒤 알맞은 목록(`TOOLS`, `RESEARCH_TOOLS`, `CODING_TOOLS`)에 추가한다.
+
+목록의 **순서**가 결과에 영향을 준다. 작은 모델은 도구가 많아지면 뒤쪽 도구를 잘 고르지 못하므로, 자주 쓰는 도구를 앞에 둔다.
 
 ## 에이전트 추가하기
 
 1. `agents/`에 모듈을 만들고 `SYSTEM_PROMPT`와 `build(SYSTEM_PROMPT, 도구목록)`을 호출하는 팩토리를 쓴다.
 2. `agents/__init__.py`에서 재노출한다.
 3. 명령으로 쓰려면 `cli.py`에 `_run(팩토리, "이름")` 함수를 하나 만들고 `[project.scripts]`에 등록한다.
+
+## 알려진 한계
+
+기본 모델인 `qwen3.5:9b`는 도구가 일곱 개인 `coder`에서 작업은 끝내면서도 마무리 문장을 내놓지 않을 때가 있다.
+그럴 때는 `ask()`가 대신 실행한 도구 목록을 보여준다. 더 큰 모델을 쓰면 줄어든다.
