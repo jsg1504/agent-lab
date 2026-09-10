@@ -48,6 +48,25 @@ WORKSPACE_ROOT=~/some/project uv run coder "test_calc.py가 실패한다. 원인
 > `coder`는 파일을 덮어쓰고 셸 명령을 실행한다. 되돌릴 수 있는 곳(버전 관리 중인 디렉터리)에서 쓰는 편이 안전하다.
 > 파일 도구는 `WORKSPACE_ROOT` 밖을 거부하지만, `run_command`는 셸이라 그 경계가 적용되지 않는다.
 
+## 대화 기억
+
+대화형 모드는 앞의 대화를 기억한다. 세 에이전트 모두 해당한다.
+
+```
+> test_calc.py가 실패한다. 고쳐줘.
+calc.py의 add 함수를 a - b에서 a + b로 고쳤습니다. ...
+
+> 방금 어느 파일의 무엇을 고쳤지?
+calc.py의 add 함수를 return a - b에서 return a + b로 고쳤습니다.
+```
+
+`create_agent`의 `checkpointer`에 `InMemorySaver`를 물려 구현했다. 기억은 **프로세스 안에서만** 산다.
+명령을 끝내면 사라지므로 단발 질문끼리는 이어지지 않는다.
+
+여러 대화를 나눠 담으려면 `ask(agent, question, thread_id)`에 서로 다른 `thread_id`를 준다.
+실행 사이에도 기억을 남기려면 `langgraph-checkpoint-sqlite`를 설치하고 `agents/base.py`의 `InMemorySaver`를
+`SqliteSaver`로 바꾸면 된다.
+
 ## 설정
 
 `.env` 파일 또는 환경 변수로 설정한다. 모두 선택 사항이다.
@@ -89,7 +108,7 @@ llm.py              OpenAI 호환 API 연결 (ChatOpenAI)
 .env.example        환경 변수 틀
 agents/
   __init__.py       에이전트 재노출
-  base.py           build() / ask() 공통
+  base.py           build() / ask() 공통, 대화 기억
   assistant.py      일반 어시스턴트
   researcher.py     조사 담당
   coder.py          코딩 담당
@@ -121,3 +140,6 @@ tools/
 
 기본 모델인 `qwen3.5:9b`는 도구가 일곱 개인 `coder`에서 작업은 끝내면서도 마무리 문장을 내놓지 않을 때가 있다.
 그럴 때는 `ask()`가 대신 실행한 도구 목록을 보여준다. 더 큰 모델을 쓰면 줄어든다.
+
+같은 모델이 여러 턴 대화에서 생각 부분을 답변에 흘려 `</think>`가 섞여 나오는 일도 있다.
+`ask()`가 마지막 `</think>` 뒤만 남겨 걷어낸다.
