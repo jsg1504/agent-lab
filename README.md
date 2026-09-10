@@ -31,7 +31,13 @@ uv run python agent.py
 
 ## 설정
 
-환경 변수로 재정의한다. 셋 다 선택 사항이다.
+`.env` 파일 또는 환경 변수로 설정한다. 셋 다 선택 사항이다.
+
+```bash
+cp .env.example .env
+```
+
+이미 설정된 환경 변수가 `.env` 값보다 우선한다. `.env`는 커밋되지 않는다.
 
 | 변수 | 기본값 | 설명 |
 | --- | --- | --- |
@@ -59,6 +65,7 @@ OPENAI_BASE_URL=https://api.example.com/v1 OPENAI_API_KEY=sk-... OPENAI_MODEL=gp
 ```
 agent.py            에이전트 조립 + CLI
 llm.py              OpenAI 호환 API 연결 (ChatOpenAI)
+.env.example        환경 변수 틀
 tools/
   __init__.py       TOOLS 집계
   clock.py          get_current_time

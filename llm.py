@@ -2,7 +2,10 @@
 
 import os
 
+from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
+
+load_dotenv()  # .env가 있으면 읽는다. 이미 설정된 환경 변수가 우선한다.
 
 # 아래는 기본값일 뿐이다. 다른 서버를 쓰려면 환경 변수로 재정의한다.
 BASE_URL = os.getenv("OPENAI_BASE_URL", "http://localhost:11434/v1")
