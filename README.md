@@ -23,10 +23,10 @@ ollama pull qwen3.5:9b
 
 ```bash
 # 단발 질문
-uv run python agent.py "지금 몇 시야?"
+uv run agent "지금 몇 시야?"
 
 # 대화형 (종료: Ctrl-D)
-uv run python agent.py
+uv run agent
 ```
 
 ## 설정
@@ -49,21 +49,22 @@ cp .env.example .env
 
 ```bash
 # 로컬 Ollama, 다른 모델
-OPENAI_MODEL=qwen2.5:3b-instruct uv run python agent.py "안녕"
+OPENAI_MODEL=qwen2.5:3b-instruct uv run agent "안녕"
 
 # vLLM 등 인증 없는 서버
 OPENAI_BASE_URL=http://192.168.0.10:8000/v1 OPENAI_MODEL=my-model \
-  uv run python agent.py "안녕"
+  uv run agent "안녕"
 
 # 키가 필요한 서버
 OPENAI_BASE_URL=https://api.example.com/v1 OPENAI_API_KEY=sk-... OPENAI_MODEL=gpt-4o-mini \
-  uv run python agent.py "안녕"
+  uv run agent "안녕"
 ```
 
 ## 구조
 
 ```
-agent.py            에이전트 조립 + CLI
+cli.py              명령줄 인터페이스 (진입점, `agent` 명령)
+agent.py            에이전트 정의 (build_agent / ask)
 llm.py              OpenAI 호환 API 연결 (ChatOpenAI)
 .env.example        환경 변수 틀
 tools/
@@ -77,4 +78,4 @@ tools/
 1. `tools/`에 모듈을 만들고 `@tool` 함수를 작성한다.
 2. `tools/__init__.py`에서 import 한 뒤 `TOOLS`에 추가한다.
 
-`agent.py`는 수정할 필요가 없다.
+`agent.py`와 `cli.py`는 수정할 필요가 없다.
