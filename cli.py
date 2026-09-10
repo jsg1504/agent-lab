@@ -2,16 +2,16 @@
 
 import sys
 
-from agent import ask, build_agent
+from agents import ask, build_agent, build_researcher
 from llm import BASE_URL, MODEL
 
 
-def main() -> None:
-    agent = build_agent()
+def _run(build, label: str) -> None:
+    agent = build()
     if len(sys.argv) > 1:
         print(ask(agent, " ".join(sys.argv[1:])))
         return
-    print(f"model={MODEL} @ {BASE_URL}  (종료: Ctrl-D)")
+    print(f"{label} | model={MODEL} @ {BASE_URL}  (종료: Ctrl-D)")
     while True:
         try:
             question = input("\n> ").strip()
@@ -19,6 +19,14 @@ def main() -> None:
             break
         if question:
             print(ask(agent, question))
+
+
+def main() -> None:
+    _run(build_agent, "assistant")
+
+
+def researcher() -> None:
+    _run(build_researcher, "researcher")
 
 
 if __name__ == "__main__":
