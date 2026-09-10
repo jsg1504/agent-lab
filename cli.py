@@ -2,7 +2,14 @@
 
 import sys
 
-from agents import ask, build_agent, build_coder, build_researcher
+from agents import (
+    ask,
+    build_agent,
+    build_coder,
+    build_evaluator,
+    build_optimizer,
+    build_researcher,
+)
 from llm import BASE_URL, MODEL
 
 
@@ -31,6 +38,14 @@ def researcher() -> None:
 
 def coder() -> None:
     _run(build_coder, "coder")
+
+
+def optimizer() -> None:
+    _run(build_optimizer, "optimizer")
+
+
+def evaluator() -> None:
+    _run(build_evaluator, "evaluator")
 
 
 if __name__ == "__main__":

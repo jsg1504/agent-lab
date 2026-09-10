@@ -3,6 +3,15 @@
 from agents.assistant import build_agent
 from agents.base import ask
 from agents.coder import build_coder
+from agents.evaluator import build_evaluator
+from agents.optimizer import build_optimizer
 from agents.researcher import build_researcher
 
-__all__ = ["ask", "build_agent", "build_coder", "build_researcher"]
+__all__ = [
+    "ask",
+    "build_agent",
+    "build_coder",
+    "build_evaluator",
+    "build_optimizer",
+    "build_researcher",
+]

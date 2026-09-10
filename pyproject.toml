@@ -17,6 +17,8 @@ dependencies = [
 agent = "cli:main"
 researcher = "cli:researcher"
 coder = "cli:coder"
+optimizer = "cli:optimizer"
+evaluator = "cli:evaluator"
 
 [build-system]
 requires = ["hatchling"]

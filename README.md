@@ -2,7 +2,7 @@
 
 OpenAI 호환 API에 연결하는 LangChain 에이전트. 엔드포인트만 바꾸면 로컬 Ollama, vLLM, LM Studio, llama.cpp, OpenAI 본체 어디에든 붙는다.
 
-에이전트는 셋이다. 일반 어시스턴트(`agent`), 웹과 로컬 문서를 근거로 답하는 조사 담당(`researcher`), 파일을 고치고 명령을 실행하는 코딩 담당(`coder`).
+에이전트는 다섯이다. 일반 어시스턴트(`agent`), 조사 담당(`researcher`), 코딩 담당(`coder`), 그리고 딥러닝 성능을 다루는 최적화 담당(`optimizer`)과 평가 담당(`evaluator`).
 
 ## 요구 사항
 
@@ -31,6 +31,8 @@ ollama pull qwen3.5:9b
 | `uv run agent` | 일반 어시스턴트 |
 | `uv run researcher` | 조사 담당. 웹과 로컬 문서를 근거로 답하고 출처를 밝힌다 |
 | `uv run coder` | 코딩 담당. `WORKSPACE_ROOT` 안에서 파일을 고치고 셸 명령을 실행한다 |
+| `uv run optimizer` | 최적화 담당. 딥러닝 모델과 커널 코드를 고쳐 지연을 줄인다 |
+| `uv run evaluator` | 평가 담당. 빌드되는지, 결과가 맞는지, 얼마나 빨라졌는지 잰다 |
 
 ```bash
 # 단발 질문
@@ -44,10 +46,39 @@ WORKSPACE_ROOT=~/some/project uv run coder "test_calc.py가 실패한다. 원인
 uv run agent
 uv run researcher
 WORKSPACE_ROOT=~/some/project uv run coder
+WORKSPACE_ROOT=~/kernels uv run optimizer
+WORKSPACE_ROOT=~/kernels uv run evaluator
 ```
 
-> `coder`는 파일을 덮어쓰고 셸 명령을 실행한다. 되돌릴 수 있는 곳(버전 관리 중인 디렉터리)에서 쓰는 편이 안전하다.
+> `coder`와 `optimizer`는 파일을 덮어쓰고 셸 명령을 실행한다. 되돌릴 수 있는 곳(버전 관리 중인 디렉터리)에서 쓰는 편이 안전하다.
 > 파일 도구는 `WORKSPACE_ROOT` 밖을 거부하지만, `run_command`는 셸이라 그 경계가 적용되지 않는다.
+
+## 성능 최적화
+
+`optimizer`와 `evaluator`는 짝으로 쓴다. optimizer는 고치기만 하고 측정 도구가 없으며,
+evaluator는 재기만 하고 코드를 고치지 않는다. 사람이 사이에서 이어준다.
+
+```bash
+export WORKSPACE_ROOT=~/kernels
+
+uv run optimizer "slow.py의 softmax_rows가 느리다. 최적화본을 fast.py에 같은 이름으로 만들어줘."
+uv run evaluator "slow.py가 원본, fast.py가 최적화본이다. 입력은 torch.randn(512,1024,device='cuda')를 쓴다. 평가해줘."
+```
+
+evaluator의 보고 꼴:
+
+```
+컴파일 : OK
+정확도 : max_abs_err=3.7e-09 (통과)
+지연   : 31.0ms -> 0.03ms
+```
+
+다루는 범위는 PyTorch 파이썬 코드, Triton 커널, CUDA C++ 커널이다.
+`.cu`는 `nvcc -c`로, `.py`는 임포트로 빌드를 확인한다. Triton 커널은 호출할 때 컴파일되므로
+임포트만으로는 문법까지만 걸러진다.
+
+> 측정은 `BENCH_PYTHON`이 가리키는 인터프리터에서 돈다. torch가 설치된 것이어야 한다.
+> 이 프로젝트의 uv venv에는 torch가 없으므로 보통 따로 지정해야 한다.
 
 ## 대화 기억
 
@@ -84,7 +115,8 @@ cp .env.example .env
 | `OPENAI_MODEL` | `qwen3.5:9b` | 모델 이름 |
 | `OPENAI_API_KEY` | (없음) | 인증이 필요한 서버에서만 지정한다. 비워 두면 자리 표시자가 들어간다 |
 | `DOCS_ROOT` | `.` | researcher가 조사할 로컬 디렉터리 |
-| `WORKSPACE_ROOT` | `.` | coder가 파일을 고치고 명령을 실행할 디렉터리 |
+| `WORKSPACE_ROOT` | `.` | coder와 optimizer가 파일을 고치고 명령을 실행할 디렉터리. evaluator도 이 아래를 잰다 |
+| `BENCH_PYTHON` | `python3` | evaluator가 측정을 돌릴 파이썬. torch가 있어야 한다 |
 
 연결 예시:
 
@@ -113,8 +145,11 @@ agents/
   assistant.py      일반 어시스턴트
   researcher.py     조사 담당
   coder.py          코딩 담당
+  optimizer.py      최적화 담당
+  evaluator.py      평가 담당
 tools/
-  __init__.py       TOOLS / RESEARCH_TOOLS / CODING_TOOLS 집계
+  __init__.py       도구 목록 집계 (TOOLS, RESEARCH_TOOLS, CODING_TOOLS,
+                    OPTIMIZE_TOOLS, EVALUATE_TOOLS)
   clock.py          get_current_time
   files.py          list_files
   web.py            web_search, fetch_page
@@ -122,6 +157,7 @@ tools/
   workspace.py      WORKSPACE_ROOT와 경로 봉쇄 (code/shell 공용)
   code.py           read_file, edit_file, write_file, list_dir, glob_files, grep_files
   shell.py          run_command
+  bench.py          compile_check, benchmark, compare_outputs
 ```
 
 ## 도구 추가하기
@@ -129,7 +165,8 @@ tools/
 1. `tools/`에 모듈을 만들고 `@tool` 함수를 작성한다.
 2. `tools/__init__.py`에서 import 한 뒤 알맞은 목록(`TOOLS`, `RESEARCH_TOOLS`, `CODING_TOOLS`)에 추가한다.
 
-목록의 **순서**가 결과에 영향을 준다. 작은 모델은 도구가 많아지면 뒤쪽 도구를 잘 고르지 못하므로, 자주 쓰는 도구를 앞에 둔다.
+목록을 바꾸면 같은 작업의 성패가 달라지는 일이 있다. 도구가 잘못돼서가 아니라 모델 쪽 문제이며,
+아래 '알려진 한계'에 적었다. 일단 자주 쓰는 도구를 앞에 두는 편이 무난하다.
 
 ## 에이전트 추가하기
 
@@ -139,8 +176,34 @@ tools/
 
 ## 알려진 한계
 
-기본 모델인 `qwen3.5:9b`는 도구가 일곱 개인 `coder`에서 작업은 끝내면서도 마무리 문장을 내놓지 않을 때가 있다.
-그럴 때는 `ask()`가 대신 실행한 도구 목록을 보여준다. 더 큰 모델을 쓰면 줄어든다.
+### 빈 응답으로 멈추는 문제
 
-같은 모델이 여러 턴 대화에서 생각 부분을 답변에 흘려 `</think>`가 섞여 나오는 일도 있다.
-`ask()`가 마지막 `</think>` 뒤만 남겨 걷어낸다.
+기본 모델 `qwen3.5:9b`는 추론형 모델이다. Ollama는 응답을 `content`와 `reasoning` 두 필드로 나눠 주는데,
+이 모델은 **`reasoning`에만 쓰고 `content`를 비워 보낼 때가 있다**. 빈 메시지인데도 출력 토큰이
+90개 넘게 잡히는 것으로 확인했다. 그러면 에이전트 루프는 "할 말도 부를 도구도 없다"로 읽고 작업 도중에 멈춘다.
+`langchain-openai`는 `reasoning` 필드를 버리므로 우리 쪽에는 아무 정보도 남지 않는다.
+
+같은 이유로 추론 내용이 `content`로 새어 `</think>`가 섞여 나오기도 한다. `ask()`가 마지막 `</think>`
+뒤만 남겨 걷어내고, `content`가 비면 대신 실행한 도구 목록을 보여준다. 둘 다 증상을 가릴 뿐 원인은 못 막는다.
+
+실제로 겪은 모습은 이렇다. `optimizer`에게 기존 파일의 버그 수정을 시키고 도구 구성만 바꿔가며
+각 3회씩 잰 결과다. 판정은 고친 파일을 실행해 `torch.softmax`와 일치하는지로 했다.
+
+| 구성 | 성공 | 빈 응답 |
+| --- | --- | --- |
+| 4개 도구 | 3/3 | 0/3 |
+| 5개 도구 (+`list_dir`) | 0/3 | 3/3 |
+| 6개 도구 (+`grep_files`) | 3/3 | 0/3 |
+| 7개 도구 (+`glob_files`) | 0/3 | 3/3 |
+
+개수에 따라 단조롭지 않다. 프롬프트 길이는 영향이 없었고(짧은 프롬프트 + 7개 도구도 0/3),
+빈 응답 뒤에 이어서 하라고 재촉해도 회복되지 않았다(0/3). `temperature=0`이라 각 구성은 결정적이지만
+어느 구성이 성공하느냐는 사실상 임의다. 도구 목록을 손봐서 고칠 수 있는 문제가 아니다.
+
+`/no_think`로 이 모델의 추론을 끌 수 없고, 요청 본문의 `think: false`도 Ollama가 무시한다.
+확실한 해결책은 더 큰 모델이나 추론형이 아닌 모델을 쓰는 것이다. `OPENAI_MODEL`로 바꿀 수 있다.
+
+### 영향 범위
+
+`evaluator`는 이 문제와 무관하게 안정적이다. `optimizer`도 새 최적화본을 만드는 일은 해내지만,
+기존 파일을 이어서 고치는 요청에서 멈추는 것을 반복해서 관측했다.
