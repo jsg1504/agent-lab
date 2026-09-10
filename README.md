@@ -24,25 +24,26 @@ ollama pull qwen3.5:9b
 
 ## 실행
 
+명령은 셋이다. 어느 것이든 **질문을 인자로 주면 한 번 답하고 끝나고, 인자 없이 실행하면 대화형으로 들어간다**(종료: Ctrl-D).
+
+| 명령 | 에이전트 |
+| --- | --- |
+| `uv run agent` | 일반 어시스턴트 |
+| `uv run researcher` | 조사 담당. 웹과 로컬 문서를 근거로 답하고 출처를 밝힌다 |
+| `uv run coder` | 코딩 담당. `WORKSPACE_ROOT` 안에서 파일을 고치고 셸 명령을 실행한다 |
+
 ```bash
 # 단발 질문
 uv run agent "지금 몇 시야?"
+uv run researcher "LangChain의 create_agent는 어떤 인자를 받아?"
+WORKSPACE_ROOT=~/some/project uv run coder "test_calc.py가 실패한다. 원인을 찾아 고쳐줘."
+```
 
+```bash
 # 대화형 (종료: Ctrl-D)
 uv run agent
-```
-
-조사용 에이전트는 별도 명령이다. 웹과 로컬 문서를 근거로 답하고 출처를 밝힌다.
-
-```bash
-uv run researcher "LangChain의 create_agent는 어떤 인자를 받아?"
-uv run researcher "이 프로젝트에서 LLM 연결 설정은 어디서 하지?"
-```
-
-코딩 담당은 `WORKSPACE_ROOT` 안에서 파일을 읽고 고치고 셸 명령을 실행한다.
-
-```bash
-WORKSPACE_ROOT=~/some/project uv run coder "test_calc.py가 실패한다. 원인을 찾아 고쳐줘."
+uv run researcher
+WORKSPACE_ROOT=~/some/project uv run coder
 ```
 
 > `coder`는 파일을 덮어쓰고 셸 명령을 실행한다. 되돌릴 수 있는 곳(버전 관리 중인 디렉터리)에서 쓰는 편이 안전하다.
