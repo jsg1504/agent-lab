@@ -54,3 +54,18 @@ EVALUATE_TOOLS = [
     list_dir,
     glob_files,
 ]
+
+# planner, reviewer, debugger는 읽기만 한다. 고치는 일은 optimizer, 재는 일은 evaluator 몫이다.
+# reviewer는 디바이스를 쓰기 전 단계라 compile_check도 두지 않는다.
+READ_TOOLS = [
+    read_file,
+    grep_files,
+    list_dir,
+    glob_files,
+]
+
+PLAN_TOOLS = READ_TOOLS
+
+REVIEW_TOOLS = READ_TOOLS
+
+DEBUG_TOOLS = READ_TOOLS

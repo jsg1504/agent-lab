@@ -6,9 +6,12 @@ from agents import (
     ask,
     build_agent,
     build_coder,
+    build_debugger,
     build_evaluator,
     build_optimizer,
+    build_planner,
     build_researcher,
+    build_reviewer,
 )
 from llm import BASE_URL, MODEL
 
@@ -46,6 +49,18 @@ def optimizer() -> None:
 
 def evaluator() -> None:
     _run(build_evaluator, "evaluator")
+
+
+def planner() -> None:
+    _run(build_planner, "planner")
+
+
+def reviewer() -> None:
+    _run(build_reviewer, "reviewer")
+
+
+def debugger() -> None:
+    _run(build_debugger, "debugger")
 
 
 if __name__ == "__main__":

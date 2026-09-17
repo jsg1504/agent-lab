@@ -19,6 +19,9 @@ researcher = "cli:researcher"
 coder = "cli:coder"
 optimizer = "cli:optimizer"
 evaluator = "cli:evaluator"
+planner = "cli:planner"
+reviewer = "cli:reviewer"
+debugger = "cli:debugger"
 
 [build-system]
 requires = ["hatchling"]

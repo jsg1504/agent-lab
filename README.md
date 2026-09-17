@@ -2,7 +2,8 @@
 
 OpenAI 호환 API에 연결하는 LangChain 에이전트. 엔드포인트만 바꾸면 로컬 Ollama, vLLM, LM Studio, llama.cpp, OpenAI 본체 어디에든 붙는다.
 
-에이전트는 다섯이다. 일반 어시스턴트(`agent`), 조사 담당(`researcher`), 코딩 담당(`coder`), 그리고 딥러닝 성능을 다루는 최적화 담당(`optimizer`)과 평가 담당(`evaluator`).
+에이전트는 여덟이다. 일반 어시스턴트(`agent`), 조사 담당(`researcher`), 코딩 담당(`coder`), 그리고 딥러닝 성능을 다루는
+계획 담당(`planner`), 최적화 담당(`optimizer`), 검토 담당(`reviewer`), 평가 담당(`evaluator`), 진단 담당(`debugger`).
 
 ## 요구 사항
 
@@ -24,7 +25,7 @@ ollama pull qwen3.5:9b
 
 ## 실행
 
-명령은 셋이다. 어느 것이든 **질문을 인자로 주면 한 번 답하고 끝나고, 인자 없이 실행하면 대화형으로 들어간다**(종료: Ctrl-D).
+명령은 여덟이다. 어느 것이든 **질문을 인자로 주면 한 번 답하고 끝나고, 인자 없이 실행하면 대화형으로 들어간다**(종료: Ctrl-D).
 
 | 명령 | 에이전트 |
 | --- | --- |
@@ -33,6 +34,9 @@ ollama pull qwen3.5:9b
 | `uv run coder` | 코딩 담당. `WORKSPACE_ROOT` 안에서 파일을 고치고 셸 명령을 실행한다 |
 | `uv run optimizer` | 최적화 담당. 딥러닝 모델과 커널 코드를 고쳐 지연을 줄인다 |
 | `uv run evaluator` | 평가 담당. 빌드되는지, 결과가 맞는지, 얼마나 빨라졌는지 잰다 |
+| `uv run planner` | 계획 담당. 프로파일, 분석적 상한, 채택/반려 기록을 보고 후보 가설을 순위대로 낸다 |
+| `uv run reviewer` | 검토 담당. 디바이스에서 재기 전에 후보 코드를 정적으로 검토한다 |
+| `uv run debugger` | 진단 담당. 실패한 후보의 원인을 밝히고 optimizer에게 줄 지시를 쓴다 |
 
 ```bash
 # 단발 질문
@@ -48,6 +52,9 @@ uv run researcher
 WORKSPACE_ROOT=~/some/project uv run coder
 WORKSPACE_ROOT=~/kernels uv run optimizer
 WORKSPACE_ROOT=~/kernels uv run evaluator
+WORKSPACE_ROOT=~/kernels uv run planner
+WORKSPACE_ROOT=~/kernels uv run reviewer
+WORKSPACE_ROOT=~/kernels uv run debugger
 ```
 
 > `coder`와 `optimizer`는 파일을 덮어쓰고 셸 명령을 실행한다. 되돌릴 수 있는 곳(버전 관리 중인 디렉터리)에서 쓰는 편이 안전하다.
@@ -80,9 +87,38 @@ evaluator의 보고 꼴:
 > 측정은 `BENCH_PYTHON`이 가리키는 인터프리터에서 돈다. torch가 설치된 것이어야 한다.
 > 이 프로젝트의 uv venv에는 torch가 없으므로 보통 따로 지정해야 한다.
 
+### 계획, 검토, 진단
+
+최적화 한 바퀴는 이렇게 돈다. 에이전트 사이는 지금은 사람이 이어준다.
+
+```
+planner ──가설──> optimizer ──후보──> reviewer ──통과──> evaluator ──성공──> 채택
+   ^                  ^                  │수정요청            │실패
+   │                  └──────────────────┘                    v
+   └──────────── 반려 기록(교훈) <─────────────────────── debugger ──지시──> optimizer
+```
+
+| 에이전트 | 하는 일 | 도구 |
+| --- | --- | --- |
+| `planner` | 프로파일, 분석적 상한, 채택/반려 기록을 받아 가설을 순위대로 낸다. 기대 이득은 상한을 넘지 않는다 | 읽기 전용 |
+| `reviewer` | 의미 보존, 수치 안정성, 빌드, 커널별 함정을 정적으로 보고 통과/수정요청/반려로 판정한다 | 읽기 전용 |
+| `debugger` | 컴파일 실패, 정확도 불통과, 성능 퇴행의 원인을 구현 실수와 가설 오류로 가른다 | 읽기 전용 |
+
+세 에이전트 모두 코드를 고치지도 재지도 않는다. `reviewer`는 디바이스를 쓰기 전 단계라 `compile_check`도 없다.
+
+측정 노이즈로 인한 실패는 재측정으로 보내고 `debugger`에 넘기지 않는다. `debugger`의 진단은 반려 기록에
+교훈으로 쌓이므로, 노이즈나 구현 실수를 "이 방향은 안 된다"로 적으면 옳은 방향이 묻힌다.
+그래서 `debugger`는 확신도를 함께 적고, 구현 실수이거나 원인이 불명이면 교훈을 남기지 않는다.
+
+```bash
+uv run planner "프로파일: slow.py의 softmax_rows가 90%. 상한: 최대 10x. 채택: 없음. 반려: #1 torch.compile(컴파일 시간 과다)"
+uv run reviewer "slow.py가 원본, fast.py가 후보다. 가설: 행 루프를 벡터화. 검토해줘."
+uv run debugger "slow.py가 원본, fast.py가 후보다. evaluator 보고 - 정확도: max_abs_err=nan (불통과). 진단해줘."
+```
+
 ## 대화 기억
 
-대화형 모드는 앞의 대화를 기억한다. 세 에이전트 모두 해당한다.
+대화형 모드는 앞의 대화를 기억한다. 모든 에이전트에 해당한다.
 
 ```
 > test_calc.py가 실패한다. 고쳐줘.
@@ -115,7 +151,7 @@ cp .env.example .env
 | `OPENAI_MODEL` | `qwen3.5:9b` | 모델 이름 |
 | `OPENAI_API_KEY` | (없음) | 인증이 필요한 서버에서만 지정한다. 비워 두면 자리 표시자가 들어간다 |
 | `DOCS_ROOT` | `.` | researcher가 조사할 로컬 디렉터리 |
-| `WORKSPACE_ROOT` | `.` | coder와 optimizer가 파일을 고치고 명령을 실행할 디렉터리. evaluator도 이 아래를 잰다 |
+| `WORKSPACE_ROOT` | `.` | coder와 optimizer가 파일을 고치고 명령을 실행할 디렉터리. evaluator, planner, reviewer, debugger도 이 아래를 읽는다 |
 | `BENCH_PYTHON` | `python3` | evaluator가 측정을 돌릴 파이썬. torch가 있어야 한다 |
 
 연결 예시:
@@ -147,9 +183,13 @@ agents/
   coder.py          코딩 담당
   optimizer.py      최적화 담당
   evaluator.py      평가 담당
+  planner.py        계획 담당
+  reviewer.py       검토 담당
+  debugger.py       진단 담당
 tools/
   __init__.py       도구 목록 집계 (TOOLS, RESEARCH_TOOLS, CODING_TOOLS,
-                    OPTIMIZE_TOOLS, EVALUATE_TOOLS)
+                    OPTIMIZE_TOOLS, EVALUATE_TOOLS, READ_TOOLS,
+                    PLAN_TOOLS, REVIEW_TOOLS, DEBUG_TOOLS)
   clock.py          get_current_time
   files.py          list_files
   web.py            web_search, fetch_page
@@ -205,5 +245,5 @@ tools/
 
 ### 영향 범위
 
-`evaluator`는 이 문제와 무관하게 안정적이다. `optimizer`도 새 최적화본을 만드는 일은 해내지만,
+`evaluator`는 이 문제와 무관하게 안정적이다. `reviewer`는 파일을 읽은 뒤 빈 응답으로 멈추는 것을 관측했다. `optimizer`도 새 최적화본을 만드는 일은 해내지만,
 기존 파일을 이어서 고치는 요청에서 멈추는 것을 반복해서 관측했다.
