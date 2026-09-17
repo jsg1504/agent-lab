@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Three layers, plus a record of results:
 - **Tool** — a `@tool` function in `tools/`. The smallest part.
 - **Agent** — a system prompt plus a tool list, in `agents/`. Currently eight: `agent` (general assistant), `researcher`, `coder`, and `planner`, `optimizer`, `reviewer`, `evaluator`, `debugger`.
-- **Workflow** — how agents are chained. Currently documented in README "워크플로" and chained by a human; there is no workflow code yet (see "Adding things").
+- **Workflow** — how agents are chained. LangGraph graphs live in `workflows/`; each workflow is documented in `workflows/<name>.md` (human-chained ones have only the `.md`), and README "워크플로" is just an index table.
 - **Experiment record** — README "실험 기록": which combination produced which result.
 
 Everything user-facing — system prompts, tool docstrings, tool return strings, comments, README, commit messages — is written in Korean; keep it that way.
@@ -21,6 +21,7 @@ uv sync                                   # install (Python 3.13, uv)
 uv run agent "질문"                        # one-shot: answer and exit
 uv run coder                              # no args: interactive REPL (Ctrl-D to quit)
 WORKSPACE_ROOT=~/proj uv run coder "..."  # file/shell/bench tools operate under WORKSPACE_ROOT
+WORKSPACE_ROOT=~/kernels uv run kernel-opt-oneshot slow.py "요청"  # run a workflow
 ```
 
 Entry points are `[project.scripts]` in `pyproject.toml` → functions in `cli.py`. There is no test suite, linter, or formatter configured. Verify changes by running the relevant agent against a real endpoint.
@@ -40,11 +41,22 @@ Config comes from env vars or `.env` (env vars win): `OPENAI_BASE_URL`, `OPENAI_
 
 - Tool lists and system prompts are the experimental variables. When changing them for an experiment, record the result in README "실험 기록" using its format (조건 / 과제와 판정 / 결과 / 해석) — include model, endpoint, tool composition, repeat count, and how success was judged.
 - Keep agents small: one module = `SYSTEM_PROMPT` + factory. Put behavior in tools or workflows, not in agent modules.
-- Role separation is a property of a **workflow**, not a repo-wide rule. Another workflow may split roles differently; document its split and the reason in README "워크플로".
+- Role separation is a property of a **workflow**, not a repo-wide rule. Another workflow may split roles differently; document its split and the reason in its `workflows/<name>.md`.
 
 ## Workflows
 
-### Accelerator optimization loop: role split
+- `workflows/<name>.py` — `build_<name>()` assembles a `StateGraph`; `run_<name>(...)` invokes it and returns a report string. Nodes build agents via `agents` factories (once per graph build) and call `ask(agent, question, thread_id)`. Re-exported from `workflows/__init__.py`.
+- Agent memory is keyed by `thread_id`: reuse a thread id to let an agent continue its own conversation across nodes; use distinct ids for parallel branches.
+
+### `kernel_opt_oneshot`: GPU kernel optimization (one-shot, non-interactive)
+
+`plan` (planner) → `research` (researcher) → `select` (planner, same thread as `plan`) → `Send` fan-out of 2 → per-branch subgraph `optimize` (optimizer) → `review` (reviewer) → END. Things that are easy to break:
+- The branch subgraph uses `output_schema=BranchOutput` exposing only `results` (an `operator.add` reducer). Both branches write to the parent in the same step, so any other shared key would raise `InvalidUpdateError`.
+- Each branch writes to `<stem>_opt<i><suffix>` so parallel optimizers don't overwrite each other.
+- researcher's tools can't read `WORKSPACE_ROOT`, so the node reads the kernel source itself and inlines it.
+- Branches are picked by parsing planner's `N. [대상] ...` items (`_top_items`), tolerating markdown decoration (`**`, `#`) and ignoring numbered lists without `[대상]` — planner often appends a "다음 단계" list that a plain `^\d+\.` match would pick up. Changing planner's report format breaks this. Fewer than 2 raises with the ranking text.
+
+### Accelerator optimization loop (human-chained): role split
 
 This is a deliberate role separation: `optimizer` edits code but has no measurement tools; `evaluator` measures (compile, correctness, latency) but cannot edit. A human passes results between them. Don't give either the other's capabilities. `planner` (ranks hypotheses), `reviewer` (static check before device time — so no `compile_check`), and `debugger` (diagnoses compile/correctness/regression failures; noise failures are routed to re-measurement and never reach it, so it must not invent causes that become false lessons) are read-only: they neither edit nor measure.
 
@@ -53,7 +65,7 @@ This is a deliberate role separation: `optimizer` edits code but has no measurem
 - Tool: `@tool` function in a `tools/` module → import in `tools/__init__.py` and add to the right list.
 - Agent: module in `agents/` with `SYSTEM_PROMPT` + factory → re-export in `agents/__init__.py` → `_run(factory, "label")` wrapper in `cli.py` → register in `[project.scripts]`. Also update the README "카탈로그" tables and "구조" section.
 - Tool list: define in `tools/__init__.py` and add it to README "카탈로그 > 도구 목록".
-- Workflow: document it in README "워크플로" (flow diagram, agent and permissions per step, why roles are split that way). The code location for workflows (e.g. LangGraph graphs) is not decided yet — decide it when the first workflow is implemented in code, then record it here.
+- Workflow: module in `workflows/` with `build_<name>()` + `run_<name>()` → re-export in `workflows/__init__.py` → wrapper in `cli.py` → register in `[project.scripts]`. Document it in `workflows/<name>.md` (flow diagram, agent per node, design reasons, run example) and add one row to the README "워크플로" table. Keep per-workflow detail out of README.
 
 ## Known model limitation (important when debugging)
 

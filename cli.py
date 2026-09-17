@@ -14,6 +14,7 @@ from agents import (
     build_reviewer,
 )
 from llm import BASE_URL, MODEL
+from workflows import run_kernel_opt_oneshot
 
 
 def _run(build, label: str) -> None:
@@ -61,6 +62,12 @@ def reviewer() -> None:
 
 def debugger() -> None:
     _run(build_debugger, "debugger")
+
+
+def kernel_opt_oneshot() -> None:
+    if len(sys.argv) < 2:
+        sys.exit("사용법: kernel-opt-oneshot <커널 파일> [요청]")
+    print(run_kernel_opt_oneshot(sys.argv[1], " ".join(sys.argv[2:])))
 
 
 if __name__ == "__main__":
