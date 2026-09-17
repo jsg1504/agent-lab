@@ -1,7 +1,7 @@
 [project]
-name = "optimizer-agent"
+name = "agent-lab"
 version = "0.1.0"
-description = "OpenAI 호환 API에 연결하는 LangChain 에이전트"
+description = "도구, 에이전트, 워크플로를 조합해 LLM 에이전트 설계를 실험하는 저장소"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

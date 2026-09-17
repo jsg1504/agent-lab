@@ -1,75 +1,120 @@
-# optimizer-agent
+# agent-lab
 
-OpenAI 호환 API에 연결하는 LangChain 에이전트. 엔드포인트만 바꾸면 로컬 Ollama, vLLM, LM Studio, llama.cpp, OpenAI 본체 어디에든 붙는다.
+도구, 에이전트, 워크플로를 조합해 LLM 에이전트 설계를 실험하는 저장소.
 
-에이전트는 여덟이다. 일반 어시스턴트(`agent`), 조사 담당(`researcher`), 코딩 담당(`coder`), 그리고 딥러닝 성능을 다루는
-계획 담당(`planner`), 최적화 담당(`optimizer`), 검토 담당(`reviewer`), 평가 담당(`evaluator`), 진단 담당(`debugger`).
+부품을 작게 정의해 두고, 어떤 도구를 어떤 에이전트에 주고 에이전트를 어떻게 이으면 일이 되는지를 재 본다.
+LangChain `create_agent` 위에 만들었고 OpenAI 호환 API라면 어디에든 붙는다(로컬 Ollama, vLLM, LM Studio, llama.cpp, OpenAI 본체).
 
-## 요구 사항
+## 개념
+
+| 층 | 무엇인가 | 위치 |
+| --- | --- | --- |
+| 도구 | `@tool` 함수. 가장 작은 부품 | `tools/` |
+| 에이전트 | 시스템 프롬프트 + 도구 목록 | `agents/` |
+| 워크플로 | 에이전트를 잇는 방식 | 아래 [워크플로](#워크플로) |
+| 실험 기록 | 어떤 조합이 어떤 결과를 냈는지 | 아래 [실험 기록](#실험-기록) |
+
+에이전트의 도구 목록과 프롬프트가 곧 실험 변수다. 같은 모델이라도 조합에 따라 결과가 달라진다.
+
+## 빠른 시작
 
 - Python 3.13, [uv](https://docs.astral.sh/uv/)
 - OpenAI 호환 엔드포인트 하나. 기본값은 로컬 [Ollama](https://ollama.com)(`http://localhost:11434/v1`)를 가리킨다.
-- `researcher`의 웹 검색을 쓰려면 외부 네트워크 접속이 필요하다. 검색 API 키는 필요 없다.
-
-## 설치
 
 ```bash
 uv sync
-```
-
-기본값 그대로 Ollama를 쓴다면 모델을 미리 받아둔다:
-
-```bash
-ollama pull qwen3.5:9b
-```
-
-## 실행
-
-명령은 여덟이다. 어느 것이든 **질문을 인자로 주면 한 번 답하고 끝나고, 인자 없이 실행하면 대화형으로 들어간다**(종료: Ctrl-D).
-
-| 명령 | 에이전트 |
-| --- | --- |
-| `uv run agent` | 일반 어시스턴트 |
-| `uv run researcher` | 조사 담당. 웹과 로컬 문서를 근거로 답하고 출처를 밝힌다 |
-| `uv run coder` | 코딩 담당. `WORKSPACE_ROOT` 안에서 파일을 고치고 셸 명령을 실행한다 |
-| `uv run optimizer` | 최적화 담당. 딥러닝 모델과 커널 코드를 고쳐 지연을 줄인다 |
-| `uv run evaluator` | 평가 담당. 빌드되는지, 결과가 맞는지, 얼마나 빨라졌는지 잰다 |
-| `uv run planner` | 계획 담당. 프로파일, 분석적 상한, 채택/반려 기록을 보고 후보 가설을 순위대로 낸다 |
-| `uv run reviewer` | 검토 담당. 디바이스에서 재기 전에 후보 코드를 정적으로 검토한다 |
-| `uv run debugger` | 진단 담당. 실패한 후보의 원인을 밝히고 optimizer에게 줄 지시를 쓴다 |
-
-```bash
-# 단발 질문
+ollama pull qwen3.5:9b    # 기본값 그대로 Ollama를 쓴다면
 uv run agent "지금 몇 시야?"
+```
+
+모든 명령은 **질문을 인자로 주면 한 번 답하고 끝나고, 인자 없이 실행하면 대화형으로 들어간다**(종료: Ctrl-D).
+
+```bash
 uv run researcher "LangChain의 create_agent는 어떤 인자를 받아?"
 WORKSPACE_ROOT=~/some/project uv run coder "test_calc.py가 실패한다. 원인을 찾아 고쳐줘."
+WORKSPACE_ROOT=~/kernels uv run optimizer    # 대화형
 ```
 
-```bash
-# 대화형 (종료: Ctrl-D)
-uv run agent
-uv run researcher
-WORKSPACE_ROOT=~/some/project uv run coder
-WORKSPACE_ROOT=~/kernels uv run optimizer
-WORKSPACE_ROOT=~/kernels uv run evaluator
-WORKSPACE_ROOT=~/kernels uv run planner
-WORKSPACE_ROOT=~/kernels uv run reviewer
-WORKSPACE_ROOT=~/kernels uv run debugger
-```
+## 카탈로그
+
+### 에이전트
+
+| 명령 | 역할 | 도구 목록 |
+| --- | --- | --- |
+| `uv run agent` | 일반 어시스턴트 | `TOOLS` |
+| `uv run researcher` | 조사 담당. 웹과 로컬 문서를 근거로 답하고 출처를 밝힌다 | `RESEARCH_TOOLS` |
+| `uv run coder` | 코딩 담당. `WORKSPACE_ROOT` 안에서 파일을 고치고 셸 명령을 실행한다 | `CODING_TOOLS` |
+| `uv run planner` | 계획 담당. 프로파일, 분석적 상한, 채택/반려 기록을 보고 후보 가설을 순위대로 낸다 | `PLAN_TOOLS` |
+| `uv run optimizer` | 최적화 담당. 딥러닝 모델과 커널 코드를 고쳐 지연을 줄인다 | `OPTIMIZE_TOOLS` |
+| `uv run reviewer` | 검토 담당. 디바이스에서 재기 전에 후보 코드를 정적으로 검토한다 | `REVIEW_TOOLS` |
+| `uv run evaluator` | 평가 담당. 빌드되는지, 결과가 맞는지, 얼마나 빨라졌는지 잰다 | `EVALUATE_TOOLS` |
+| `uv run debugger` | 진단 담당. 실패한 후보의 원인을 밝히고 optimizer에게 줄 지시를 쓴다 | `DEBUG_TOOLS` |
+
+### 도구 목록
+
+`tools/__init__.py`에서 정의한다.
+
+| 목록 | 도구 |
+| --- | --- |
+| `TOOLS` | `get_current_time`, `list_files` |
+| `RESEARCH_TOOLS` | `web_search`, `fetch_page`, `list_docs`, `search_docs`, `read_doc`, `get_current_time` |
+| `CODING_TOOLS` | `read_file`, `edit_file`, `run_command`, `list_dir`, `write_file`, `grep_files`, `glob_files` |
+| `OPTIMIZE_TOOLS` | `CODING_TOOLS`와 같다 |
+| `EVALUATE_TOOLS` | `read_file`, `compile_check`, `benchmark`, `compare_outputs`, `list_dir`, `glob_files` |
+| `READ_TOOLS` | `read_file`, `grep_files`, `list_dir`, `glob_files` |
+| `PLAN_TOOLS`, `REVIEW_TOOLS`, `DEBUG_TOOLS` | `READ_TOOLS`와 같다 |
+
+### 도구
+
+| 모듈 | 도구 | 비고 |
+| --- | --- | --- |
+| `clock.py` | `get_current_time` | |
+| `files.py` | `list_files` | |
+| `web.py` | `web_search`, `fetch_page` | 외부 네트워크 필요. 검색 API 키는 필요 없다 |
+| `docs.py` | `list_docs`, `search_docs`, `read_doc` | `DOCS_ROOT` 아래만 본다 |
+| `code.py` | `read_file`, `edit_file`, `write_file`, `list_dir`, `glob_files`, `grep_files` | `WORKSPACE_ROOT` 밖을 거부한다 |
+| `shell.py` | `run_command` | `WORKSPACE_ROOT`에서 실행하지만 **샌드박스가 아니다** |
+| `bench.py` | `compile_check`, `benchmark`, `compare_outputs` | `BENCH_PYTHON`에서 돈다 |
 
 > `coder`와 `optimizer`는 파일을 덮어쓰고 셸 명령을 실행한다. 되돌릴 수 있는 곳(버전 관리 중인 디렉터리)에서 쓰는 편이 안전하다.
-> 파일 도구는 `WORKSPACE_ROOT` 밖을 거부하지만, `run_command`는 셸이라 그 경계가 적용되지 않는다.
 
-## 성능 최적화
+## 워크플로
 
-`optimizer`와 `evaluator`는 짝으로 쓴다. optimizer는 고치기만 하고 측정 도구가 없으며,
-evaluator는 재기만 하고 코드를 고치지 않는다. 사람이 사이에서 이어준다.
+지금은 에이전트 사이를 사람이 이어준다.
+
+### 가속기 최적화 루프
+
+딥러닝 모델과 커널 코드(PyTorch, Triton, CUDA C++)의 지연을 줄이는 루프다.
+
+```
+planner ──가설──> optimizer ──후보──> reviewer ──통과──> evaluator ──성공──> 채택
+   ^                  ^                  │수정요청            │실패
+   │                  └──────────────────┘                    v
+   └──────────── 반려 기록(교훈) <─────────────────────── debugger ──지시──> optimizer
+```
+
+| 단계 | 에이전트 | 할 수 있는 일 |
+| --- | --- | --- |
+| 계획 | `planner` | 읽기. 기대 이득은 분석적 상한을 넘지 않는다 |
+| 수정 | `optimizer` | 읽기, 고치기, 셸. 측정 도구는 없다 |
+| 검토 | `reviewer` | 읽기. 디바이스를 쓰기 전 단계라 `compile_check`도 없다 |
+| 측정 | `evaluator` | 읽기, 컴파일 확인, 정확도 비교, 지연 측정. 고치지 않는다 |
+| 진단 | `debugger` | 읽기. 컴파일 실패, 정확도 불통과, 성능 퇴행의 원인을 구현 실수와 가설 오류로 가른다 |
+
+역할을 이렇게 나눈 이유:
+- 고치는 쪽이 측정 도구를 가지면 추측한 배수를 사실처럼 보고하기 쉽다. 그래서 `optimizer`는 고치기만, `evaluator`는 재기만 한다.
+- 측정 노이즈로 인한 실패는 재측정으로 보내고 `debugger`에 넘기지 않는다. `debugger`의 진단은 반려 기록에
+  교훈으로 쌓이므로, 노이즈나 구현 실수를 "이 방향은 안 된다"로 적으면 옳은 방향이 묻힌다.
+  그래서 `debugger`는 확신도를 함께 적고, 구현 실수이거나 원인이 불명이면 교훈을 남기지 않는다.
 
 ```bash
 export WORKSPACE_ROOT=~/kernels
 
+uv run planner "프로파일: slow.py의 softmax_rows가 90%. 상한: 최대 10x. 채택: 없음. 반려: #1 torch.compile(컴파일 시간 과다)"
 uv run optimizer "slow.py의 softmax_rows가 느리다. 최적화본을 fast.py에 같은 이름으로 만들어줘."
+uv run reviewer "slow.py가 원본, fast.py가 후보다. 가설: 행 루프를 벡터화. 검토해줘."
 uv run evaluator "slow.py가 원본, fast.py가 최적화본이다. 입력은 torch.randn(512,1024,device='cuda')를 쓴다. 평가해줘."
+uv run debugger "slow.py가 원본, fast.py가 후보다. evaluator 보고 - 정확도: max_abs_err=nan (불통과). 진단해줘."
 ```
 
 evaluator의 보고 꼴:
@@ -80,41 +125,63 @@ evaluator의 보고 꼴:
 지연   : 31.0ms -> 0.03ms
 ```
 
-다루는 범위는 PyTorch 파이썬 코드, Triton 커널, CUDA C++ 커널이다.
 `.cu`는 `nvcc -c`로, `.py`는 임포트로 빌드를 확인한다. Triton 커널은 호출할 때 컴파일되므로
 임포트만으로는 문법까지만 걸러진다.
 
 > 측정은 `BENCH_PYTHON`이 가리키는 인터프리터에서 돈다. torch가 설치된 것이어야 한다.
 > 이 프로젝트의 uv venv에는 torch가 없으므로 보통 따로 지정해야 한다.
 
-### 계획, 검토, 진단
+## 실험 기록
 
-최적화 한 바퀴는 이렇게 돈다. 에이전트 사이는 지금은 사람이 이어준다.
+조합을 바꿔 본 결과는 여기에 남긴다. 다음 실험과 비교할 수 있도록 아래 항목을 함께 적는다.
 
-```
-planner ──가설──> optimizer ──후보──> reviewer ──통과──> evaluator ──성공──> 채택
-   ^                  ^                  │수정요청            │실패
-   │                  └──────────────────┘                    v
-   └──────────── 반려 기록(교훈) <─────────────────────── debugger ──지시──> optimizer
-```
+- **조건**: 모델, 엔드포인트, 에이전트, 도구 구성, 프롬프트 변경 여부
+- **과제와 판정**: 무엇을 시켰고 성공을 무엇으로 판정했는지
+- **결과**: 반복 횟수와 성공/실패 수
+- **해석**: 결과에서 말할 수 있는 것과 말할 수 없는 것
 
-| 에이전트 | 하는 일 | 도구 |
+### 도구 구성에 따른 빈 응답 (`qwen3.5:9b`)
+
+- **조건**: `qwen3.5:9b` @ Ollama, `optimizer`, 도구 구성만 바꿈
+- **과제와 판정**: 기존 파일의 버그 수정. 고친 파일을 실행해 `torch.softmax`와 일치하면 성공
+- **결과**: 구성마다 3회
+
+| 구성 | 성공 | 빈 응답 |
 | --- | --- | --- |
-| `planner` | 프로파일, 분석적 상한, 채택/반려 기록을 받아 가설을 순위대로 낸다. 기대 이득은 상한을 넘지 않는다 | 읽기 전용 |
-| `reviewer` | 의미 보존, 수치 안정성, 빌드, 커널별 함정을 정적으로 보고 통과/수정요청/반려로 판정한다 | 읽기 전용 |
-| `debugger` | 컴파일 실패, 정확도 불통과, 성능 퇴행의 원인을 구현 실수와 가설 오류로 가른다 | 읽기 전용 |
+| 4개 도구 | 3/3 | 0/3 |
+| 5개 도구 (+`list_dir`) | 0/3 | 3/3 |
+| 6개 도구 (+`grep_files`) | 3/3 | 0/3 |
+| 7개 도구 (+`glob_files`) | 0/3 | 3/3 |
 
-세 에이전트 모두 코드를 고치지도 재지도 않는다. `reviewer`는 디바이스를 쓰기 전 단계라 `compile_check`도 없다.
+- **해석**: 도구 개수에 따라 단조롭지 않다. 프롬프트 길이는 영향이 없었고(짧은 프롬프트 + 7개 도구도 0/3),
+  빈 응답 뒤에 이어서 하라고 재촉해도 회복되지 않았다(0/3). `temperature=0`이라 각 구성은 결정적이지만
+  어느 구성이 성공하느냐는 사실상 임의다. 도구 목록을 손봐서 고칠 수 있는 문제가 아니다.
+  원인은 아래 [알려진 한계](#알려진-한계)에 적었다.
 
-측정 노이즈로 인한 실패는 재측정으로 보내고 `debugger`에 넘기지 않는다. `debugger`의 진단은 반려 기록에
-교훈으로 쌓이므로, 노이즈나 구현 실수를 "이 방향은 안 된다"로 적으면 옳은 방향이 묻힌다.
-그래서 `debugger`는 확신도를 함께 적고, 구현 실수이거나 원인이 불명이면 교훈을 남기지 않는다.
+기타 관측:
+- `evaluator`는 이 문제와 무관하게 안정적이다.
+- `optimizer`는 새 최적화본을 만드는 일은 해내지만, 기존 파일을 이어서 고치는 요청에서 멈추는 것을 반복해서 관측했다.
+- `reviewer`는 파일을 읽은 뒤 빈 응답으로 멈추는 것을 관측했다.
 
-```bash
-uv run planner "프로파일: slow.py의 softmax_rows가 90%. 상한: 최대 10x. 채택: 없음. 반려: #1 torch.compile(컴파일 시간 과다)"
-uv run reviewer "slow.py가 원본, fast.py가 후보다. 가설: 행 루프를 벡터화. 검토해줘."
-uv run debugger "slow.py가 원본, fast.py가 후보다. evaluator 보고 - 정확도: max_abs_err=nan (불통과). 진단해줘."
-```
+## 확장하기
+
+### 도구 추가
+
+1. `tools/`에 모듈을 만들고 `@tool` 함수를 작성한다.
+2. `tools/__init__.py`에서 import 한 뒤 알맞은 도구 목록에 추가한다.
+
+목록을 바꾸면 같은 작업의 성패가 달라지는 일이 있다([실험 기록](#실험-기록) 참고). 바꿨다면 결과를 기록해 둔다.
+
+### 에이전트 추가
+
+1. `agents/`에 모듈을 만들고 `SYSTEM_PROMPT`와 `build(SYSTEM_PROMPT, 도구목록)`을 호출하는 팩토리를 쓴다.
+2. `agents/__init__.py`에서 재노출한다.
+3. 명령으로 쓰려면 `cli.py`에 `_run(팩토리, "이름")` 함수를 하나 만들고 `[project.scripts]`에 등록한다.
+4. 이 README의 [카탈로그](#카탈로그) 표에 추가한다.
+
+### 워크플로 추가
+
+[워크플로](#워크플로) 절에 흐름도, 단계별 에이전트와 권한, 역할을 그렇게 나눈 이유를 적는다.
 
 ## 대화 기억
 
@@ -172,7 +239,7 @@ OPENAI_BASE_URL=https://api.example.com/v1 OPENAI_API_KEY=sk-... OPENAI_MODEL=gp
 ## 구조
 
 ```
-cli.py              명령줄 인터페이스 (`agent`, `researcher` 진입점)
+cli.py              명령줄 진입점 (에이전트마다 하나)
 llm.py              OpenAI 호환 API 연결 (ChatOpenAI)
 .env.example        환경 변수 틀
 agents/
@@ -181,38 +248,16 @@ agents/
   assistant.py      일반 어시스턴트
   researcher.py     조사 담당
   coder.py          코딩 담당
-  optimizer.py      최적화 담당
-  evaluator.py      평가 담당
   planner.py        계획 담당
+  optimizer.py      최적화 담당
   reviewer.py       검토 담당
+  evaluator.py      평가 담당
   debugger.py       진단 담당
 tools/
-  __init__.py       도구 목록 집계 (TOOLS, RESEARCH_TOOLS, CODING_TOOLS,
-                    OPTIMIZE_TOOLS, EVALUATE_TOOLS, READ_TOOLS,
-                    PLAN_TOOLS, REVIEW_TOOLS, DEBUG_TOOLS)
-  clock.py          get_current_time
-  files.py          list_files
-  web.py            web_search, fetch_page
-  docs.py           list_docs, search_docs, read_doc
-  workspace.py      WORKSPACE_ROOT와 경로 봉쇄 (code/shell 공용)
-  code.py           read_file, edit_file, write_file, list_dir, glob_files, grep_files
-  shell.py          run_command
-  bench.py          compile_check, benchmark, compare_outputs
+  __init__.py       도구 목록 정의
+  workspace.py      WORKSPACE_ROOT와 경로 봉쇄 (code/shell/bench 공용)
+  clock.py, files.py, web.py, docs.py, code.py, shell.py, bench.py
 ```
-
-## 도구 추가하기
-
-1. `tools/`에 모듈을 만들고 `@tool` 함수를 작성한다.
-2. `tools/__init__.py`에서 import 한 뒤 알맞은 목록(`TOOLS`, `RESEARCH_TOOLS`, `CODING_TOOLS`)에 추가한다.
-
-목록을 바꾸면 같은 작업의 성패가 달라지는 일이 있다. 도구가 잘못돼서가 아니라 모델 쪽 문제이며,
-아래 '알려진 한계'에 적었다. 일단 자주 쓰는 도구를 앞에 두는 편이 무난하다.
-
-## 에이전트 추가하기
-
-1. `agents/`에 모듈을 만들고 `SYSTEM_PROMPT`와 `build(SYSTEM_PROMPT, 도구목록)`을 호출하는 팩토리를 쓴다.
-2. `agents/__init__.py`에서 재노출한다.
-3. 명령으로 쓰려면 `cli.py`에 `_run(팩토리, "이름")` 함수를 하나 만들고 `[project.scripts]`에 등록한다.
 
 ## 알려진 한계
 
@@ -226,24 +271,7 @@ tools/
 같은 이유로 추론 내용이 `content`로 새어 `</think>`가 섞여 나오기도 한다. `ask()`가 마지막 `</think>`
 뒤만 남겨 걷어내고, `content`가 비면 대신 실행한 도구 목록을 보여준다. 둘 다 증상을 가릴 뿐 원인은 못 막는다.
 
-실제로 겪은 모습은 이렇다. `optimizer`에게 기존 파일의 버그 수정을 시키고 도구 구성만 바꿔가며
-각 3회씩 잰 결과다. 판정은 고친 파일을 실행해 `torch.softmax`와 일치하는지로 했다.
-
-| 구성 | 성공 | 빈 응답 |
-| --- | --- | --- |
-| 4개 도구 | 3/3 | 0/3 |
-| 5개 도구 (+`list_dir`) | 0/3 | 3/3 |
-| 6개 도구 (+`grep_files`) | 3/3 | 0/3 |
-| 7개 도구 (+`glob_files`) | 0/3 | 3/3 |
-
-개수에 따라 단조롭지 않다. 프롬프트 길이는 영향이 없었고(짧은 프롬프트 + 7개 도구도 0/3),
-빈 응답 뒤에 이어서 하라고 재촉해도 회복되지 않았다(0/3). `temperature=0`이라 각 구성은 결정적이지만
-어느 구성이 성공하느냐는 사실상 임의다. 도구 목록을 손봐서 고칠 수 있는 문제가 아니다.
+어느 도구 구성에서 이 문제가 나타나는지는 사실상 임의다([실험 기록](#도구-구성에-따른-빈-응답-qwen359b) 참고).
 
 `/no_think`로 이 모델의 추론을 끌 수 없고, 요청 본문의 `think: false`도 Ollama가 무시한다.
 확실한 해결책은 더 큰 모델이나 추론형이 아닌 모델을 쓰는 것이다. `OPENAI_MODEL`로 바꿀 수 있다.
-
-### 영향 범위
-
-`evaluator`는 이 문제와 무관하게 안정적이다. `reviewer`는 파일을 읽은 뒤 빈 응답으로 멈추는 것을 관측했다. `optimizer`도 새 최적화본을 만드는 일은 해내지만,
-기존 파일을 이어서 고치는 요청에서 멈추는 것을 반복해서 관측했다.
