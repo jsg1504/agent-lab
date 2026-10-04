@@ -7,9 +7,9 @@ from langgraph.checkpoint.memory import InMemorySaver
 from llm import build_llm
 
 
-def build(system_prompt: str, tools: list):
+def build(system_prompt: str, tools: list, model: str | None = None):
     return create_agent(
-        model=build_llm(),
+        model=build_llm(model),
         tools=tools,
         system_prompt=system_prompt,
         checkpointer=InMemorySaver(),

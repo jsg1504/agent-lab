@@ -14,9 +14,10 @@ MODEL = os.getenv("OPENAI_MODEL", "qwen3.5:9b")
 API_KEY = os.getenv("OPENAI_API_KEY") or "no-key"
 
 
-def build_llm() -> ChatOpenAI:
+def build_llm(model: str | None = None) -> ChatOpenAI:
+    """model을 주면 OPENAI_MODEL 대신 그 모델을 쓴다. 에이전트마다 모델을 달리할 때 쓴다."""
     return ChatOpenAI(
-        model=MODEL,
+        model=model or MODEL,
         base_url=BASE_URL,
         api_key=API_KEY,
         temperature=0,
