@@ -1,5 +1,6 @@
 """명령줄 인터페이스."""
 
+import argparse
 import sys
 
 from agents import (
@@ -13,6 +14,7 @@ from agents import (
     build_researcher,
     build_reviewer,
 )
+from benchmarks import run_kernelbench
 from llm import BASE_URL, MODEL, ConfigError
 from workflows import run_kernel_opt_oneshot, run_kernel_opt_orchestrator
 
@@ -81,6 +83,28 @@ def kernel_opt_orchestrator() -> None:
         sys.exit("사용법: kernel-opt-orchestrator <커널 파일> [요청]")
     try:
         print(run_kernel_opt_orchestrator(sys.argv[1], " ".join(sys.argv[2:])))
+    except ConfigError as exc:
+        sys.exit(str(exc))
+
+
+def _ids(values: list[str]) -> list[int]:
+    """1 2 5 또는 1-10 꼴의 문제 번호를 펼친다."""
+    ids = []
+    for value in values:
+        start, _, end = value.partition("-")
+        ids += range(int(start), int(end or start) + 1)
+    return ids
+
+
+def kernelbench() -> None:
+    parser = argparse.ArgumentParser(prog="kernelbench", description="KernelBench 문제에 워크플로를 돌리고 채점한다.")
+    parser.add_argument("level", type=int)
+    parser.add_argument("problems", nargs="+", help="문제 번호. 예) 1 2 5 또는 1-10")
+    parser.add_argument("--workflow", choices=["orchestrator", "oneshot"], default="orchestrator")
+    parser.add_argument("--request", default="", help="워크플로에 덧붙일 요청")
+    args = parser.parse_args()
+    try:
+        print(run_kernelbench(args.level, _ids(args.problems), args.workflow, args.request))
     except ConfigError as exc:
         sys.exit(str(exc))
 

@@ -12,6 +12,7 @@ LangChain `create_agent` 위에 만들었고 OpenAI 호환 API라면 어디에�
 | 도구 | `@tool` 함수. 가장 작은 부품 | `tools/` |
 | 에이전트 | 시스템 프롬프트 + 도구 목록 | `agents/` |
 | 워크플로 | 에이전트를 잇는 방식. LangGraph 그래프 | `workflows/` |
+| 벤치마크 | 워크플로를 공개 문제 집합에 돌리고 공식 채점기로 채점한다 | `benchmarks/` |
 | 실험 기록 | 어떤 조합이 어떤 결과를 냈는지 | 아래 [실험 기록](#실험-기록) |
 
 에이전트의 도구 목록과 프롬프트가 곧 실험 변수다. 같은 모델이라도 조합에 따라 결과가 달라진다.
@@ -92,6 +93,41 @@ WORKSPACE_ROOT=~/kernels uv run optimizer    # 대화형
 | GPU 커널 최적화 (오케스트레이터 + 하위 에이전트) | `uv run kernel-opt-orchestrator <커널> [요청]` | [`workflows/kernel_opt_orchestrator/`](workflows/kernel_opt_orchestrator/README.md) |
 | 가속기 최적화 루프 | 사람이 에이전트를 차례로 실행 | [`workflows/accel_opt_manual/`](workflows/accel_opt_manual/README.md) |
 
+## 벤치마크
+
+워크플로를 벤치마크 문제 여러 개에 돌리고, 끝난 뒤 공식 채점기로 후보(`<문제>_opt*`)를 모두 채점해 집계한다.
+채점은 하네스가 하고 **에이전트는 공식 채점기를 모른다**. 에이전트의 도구와 프롬프트가 그대로라 워크플로끼리, 모델끼리 같은 잣대로 비교할 수 있다.
+
+| 벤치마크 | 실행 |
+| --- | --- |
+| [KernelBench](https://github.com/ScalingIntelligence/KernelBench) | `uv run kernelbench <레벨> <문제 번호...> [--workflow orchestrator\|oneshot] [--request "..."]` |
+
+### KernelBench
+
+KernelBench는 이 프로젝트의 의존성이 아니다. torch가 있는 측정용 파이썬에 따로 설치한다.
+
+```bash
+git clone https://github.com/ScalingIntelligence/KernelBench.git ~/KernelBench
+git -C ~/KernelBench checkout 423217d9fda91e0c2d67e4a43bf62f96f6d104f1
+<측정용 python> -m pip install -e ~/KernelBench
+```
+
+`.env`에 `KERNELBENCH_ROOT=~/KernelBench`를 넣고, 측정용 파이썬이 `BENCH_PYTHON`과 다르면 `KERNELBENCH_PYTHON`도 지정한다.
+
+```bash
+uv run kernelbench 1 1-3                      # 레벨 1의 1~3번, 오케스트레이터 워크플로
+uv run kernelbench 1 19 23 --workflow oneshot # 단발 워크플로
+```
+
+- 문제는 `WORKSPACE_ROOT/kernelbench/l<레벨>_p<번호>.py`로 복사된다. 같은 이름의 이전 후보는 실행 전에 지운다.
+- 후보는 원본과 같이 `Model` 클래스로 만들어도 된다. `ModelNew`가 없으면 `Model`을 `ModelNew`로 보고 채점한다.
+  `import triton`이 있는 후보는 KernelBench의 triton 백엔드로 채점한다.
+- 지표: 정확 비율, `fast_0`(정확한 비율), `fast_1`(정확하고 원본보다 빠른 비율), 정확한 문제의 속도향상 기하평균.
+  문제마다 정확한 후보 중 가장 빠른 것을 쓴다. 원본을 그대로 낸 후보도 측정 잡음으로 1.0x를 조금 넘을 수 있다.
+- 결과는 화면에 요약과 후보별 채점 표로 나오고, 워크플로 보고 원문까지 담은 보고서가 `WORKSPACE_ROOT/benchmarks/`에 남는다.
+- 이 커밋의 레벨 1 문제는 입력이 수 GiB인 것이 많다. GPU 메모리가 작으면 OOM으로 실패로 채점된다.
+  하드웨어와 채점 설정이 다르므로 수치는 공식 리더보드와 바로 비교할 수 없다.
+
 ## 실험 기록
 
 조합을 바꿔 본 결과는 여기에 남긴다. 다음 실험과 비교할 수 있도록 아래 항목을 함께 적는다.
@@ -165,6 +201,15 @@ WORKSPACE_ROOT=~/kernels uv run optimizer    # 대화형
 
 사람이 잇는 워크플로는 코드 없이 `workflows/<이름>/README.md`만 둔다.
 
+### 벤치마크 추가
+
+1. `benchmarks/<이름>.py`에 어댑터를 쓴다. 문제를 `WORKSPACE_ROOT` 아래로 준비해 `Problem` 목록을 만들고,
+   원본과 후보 경로를 받아 `Score(compiled, correct, speedup, detail)`를 돌려주는 채점 함수를 쓴 뒤 `run_suite()`를 부른다.
+   workload가 여러 개인 벤치마크라면 이를 하나의 `Score`로 줄이는 방법도 어댑터가 정한다.
+2. 측정용 파이썬은 `<이름>_PYTHON`처럼 벤치마크마다 두고, 비어 있으면 `BENCH_PYTHON`을 쓴다. 채점 스크립트는 `tools/bench.py`의 `_run(script, python)`으로 돌린다.
+3. `benchmarks/__init__.py`에서 재노출하고, `cli.py`에 명령을 만들어 `[project.scripts]`에 등록한다.
+4. 이 README의 [벤치마크](#벤치마크) 표와 설정 표에 추가한다.
+
 ## 대화 기억
 
 대화형 모드는 앞의 대화를 기억한다. 모든 에이전트에 해당한다.
@@ -202,6 +247,8 @@ cp .env.example .env
 | `DOCS_ROOT` | `.` | researcher가 조사할 로컬 디렉터리 |
 | `WORKSPACE_ROOT` | 프로젝트의 `workspace/` | 지정하지 않으면 이 디렉터리를 만들어 쓴다(git에는 올리지 않는다). coder와 optimizer가 파일을 고치고 명령을 실행할 디렉터리. evaluator, planner, reviewer, debugger도 이 아래를 읽는다 |
 | `BENCH_PYTHON` | `python3` | evaluator가 측정을 돌릴 파이썬. torch가 있어야 한다 |
+| `KERNELBENCH_ROOT` | (없음) | KernelBench 저장소 경로. `uv run kernelbench`에만 필요하다 |
+| `KERNELBENCH_PYTHON` | `BENCH_PYTHON` | KernelBench 채점을 돌릴 파이썬. KernelBench와 torch가 있어야 한다 |
 
 연결 예시:
 
@@ -248,6 +295,10 @@ workflows/
     README.md           설명
   accel_opt_manual/     가속기 최적화 루프 (사람이 이음)
     README.md           설명
+benchmarks/
+  __init__.py       벤치마크 재노출
+  suite.py          공통: 문제마다 워크플로 실행, 채점 결과 집계, 보고서
+  kernelbench.py    KernelBench 어댑터 (문제 준비, 공식 채점)
 tools/
   __init__.py       도구 목록 정의
   workspace.py      WORKSPACE_ROOT와 경로 봉쇄 (code/shell/bench 공용)

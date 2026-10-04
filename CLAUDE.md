@@ -6,10 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `agent-lab`: a repo for experimenting with LLM agent designs by combining tools, agents, and workflows. Built on LangChain `create_agent`, talking to any OpenAI-compatible endpoint. `OPENAI_BASE_URL` and `OPENAI_MODEL` have no defaults; experiments so far used local Ollama with `qwen3.5:9b`.
 
-Three layers, plus a record of results:
+Three layers, a benchmark harness on top, plus a record of results:
 - **Tool** — a `@tool` function in `tools/`. The smallest part.
 - **Agent** — a system prompt plus a tool list, in `agents/`. Currently eight: `agent` (general assistant), `researcher`, `coder`, and `planner`, `optimizer`, `reviewer`, `evaluator`, `debugger`.
 - **Workflow** — how agents are chained. Each workflow is a directory `workflows/<name>/`, documented in its `README.md` (human-chained ones have only the `README.md`), and README "워크플로" is just an index table.
+- **Benchmark** — `benchmarks/`: runs a workflow over a public problem set and scores the candidates with that benchmark's official scorer. Currently KernelBench.
 - **Experiment record** — README "실험 기록": which combination produced which result.
 
 Everything user-facing — system prompts, tool docstrings, tool return strings, comments, README, commit messages — is written in Korean; keep it that way.
@@ -22,11 +23,12 @@ uv run agent "질문"                        # one-shot: answer and exit
 uv run coder                              # no args: interactive REPL (Ctrl-D to quit)
 WORKSPACE_ROOT=~/proj uv run coder "..."  # file/shell/bench tools operate under WORKSPACE_ROOT
 WORKSPACE_ROOT=~/kernels uv run kernel-opt-oneshot slow.py "요청"  # run a workflow
+uv run kernelbench 1 1-3 --workflow oneshot  # run a workflow over KernelBench level 1, problems 1-3
 ```
 
 Entry points are `[project.scripts]` in `pyproject.toml` → functions in `cli.py`. There is no test suite, linter, or formatter configured. Verify changes by running the relevant agent against a real endpoint.
 
-Config comes from env vars or `.env` (env vars win). `OPENAI_BASE_URL` and `OPENAI_MODEL` are required: `build_llm()` raises `ConfigError` when either is missing or empty, and `cli.py` turns it into an exit message. Optional: `OPENAI_API_KEY`, `DOCS_ROOT`, `WORKSPACE_ROOT`, `BENCH_PYTHON`. See `.env.example`.
+Config comes from env vars or `.env` (env vars win). `OPENAI_BASE_URL` and `OPENAI_MODEL` are required: `build_llm()` raises `ConfigError` when either is missing or empty, and `cli.py` turns it into an exit message. Optional: `OPENAI_API_KEY`, `DOCS_ROOT`, `WORKSPACE_ROOT`, `BENCH_PYTHON`, `KERNELBENCH_ROOT` (required only by `kernelbench`; missing → `ConfigError`), `KERNELBENCH_PYTHON` (falls back to `BENCH_PYTHON`). See `.env.example`.
 
 ## Architecture
 
@@ -35,7 +37,14 @@ Config comes from env vars or `.env` (env vars win). `OPENAI_BASE_URL` and `OPEN
 - `agents/<name>.py` — each is just a `SYSTEM_PROMPT` plus a `build_<name>()` factory calling `build(SYSTEM_PROMPT, <TOOL_LIST>)`. Re-exported from `agents/__init__.py`.
 - `tools/__init__.py` — calls `load_dotenv()` **before** importing tool modules, because modules like `tools/workspace.py` and `tools/bench.py` read env vars at import time. Defines the per-agent lists: `TOOLS`, `RESEARCH_TOOLS`, `CODING_TOOLS`, `OPTIMIZE_TOOLS` (= `CODING_TOOLS`), `EVALUATE_TOOLS`, and `PLAN_TOOLS`/`REVIEW_TOOLS`/`DEBUG_TOOLS` (all = read-only `READ_TOOLS`).
 - `tools/workspace.py` — `ROOT` from `WORKSPACE_ROOT`; when unset or empty it defaults to `<project>/workspace/` (created on import, gitignored) so agents don't edit the project source by default; `resolve()` returns `None` for paths escaping the root, and every file tool in `code.py`/`bench.py` must check that. `run_command` (`tools/shell.py`) is a raw shell with `cwd=ROOT` and is **not** sandboxed.
-- `tools/bench.py` — `benchmark`, `compare_outputs`, `compile_check` generate a Python script (a `_PRELUDE` + templated body) and run it in a separate interpreter (`BENCH_PYTHON`, which must have torch; the project venv does not). The script reports back by printing a single JSON line to stdout, which `_run` parses. `.cu` files are checked with `nvcc -c`; `.py` files by importing them.
+- `tools/bench.py` — `benchmark`, `compare_outputs`, `compile_check` generate a Python script (a `_PRELUDE` + templated body) and run it in a separate interpreter (`BENCH_PYTHON`, which must have torch; the project venv does not). The script reports back by printing a single JSON line to stdout, which `_run` parses. `.cu` files are checked with `nvcc -c`; `.py` files by importing them. `_run(script, python=BENCH_PYTHON)` takes the interpreter as an argument so benchmark adapters can reuse it with their own.
+
+## Benchmarks
+
+- `benchmarks/suite.py` — `run_suite(title, problems, score, workflow, request)`: per `Problem`, deletes stale `<name>_opt*` files, runs the workflow (`WORKFLOWS`: `orchestrator`/`oneshot`; exceptions are recorded, not raised), then scores **every** `<name>_opt*` with the adapter's `score(reference, candidate) -> Score`, keeps the fastest correct one, aggregates (correct rate, fast_0, fast_1, geomean speedup), and writes a report to `WORKSPACE_ROOT/benchmarks/`.
+- Scoring is done by the harness in code, **not** by an agent tool, on purpose: agents' tool lists and prompts stay unchanged, so workflow/model comparisons keep the same experimental variables. Don't add benchmark scorers to `EVALUATE_TOOLS`.
+- One adapter per benchmark (problem/candidate/result formats differ, e.g. KernelBench = one `.py` per problem, FlashInfer-Bench = definition JSON + many workloads). Shared code is only `suite.py`. Each benchmark gets its own interpreter variable (`<NAME>_PYTHON`, fallback `BENCH_PYTHON`) since pinned versions conflict.
+- `benchmarks/kernelbench.py` — pinned to KernelBench commit `423217d9…` (`kernelbench.eval.eval_kernel_against_ref`). Problems are copied to `kernelbench/l<level>_p<id>.py` (original names start with a digit and can't be imported). If a candidate has no `ModelNew` but has `class Model`, `ModelNew = Model` is appended — existing workflows tell the optimizer to keep the original name, and this avoids changing their prompts. Candidates containing `import triton` use `backend="triton"`. KernelBench's own stdout is redirected to stderr so `_run` sees only the JSON line.
 
 ## Experiment conventions
 
@@ -76,6 +85,7 @@ This is a deliberate role separation: `optimizer` edits code but has no measurem
 - Agent: module in `agents/` with `SYSTEM_PROMPT` + factory → re-export in `agents/__init__.py` → `_run(factory, "label")` wrapper in `cli.py` → register in `[project.scripts]`. Also update the README "카탈로그" tables and "구조" section.
 - Tool list: define in `tools/__init__.py` and add it to README "카탈로그 > 도구 목록".
 - Workflow: package `workflows/<name>/` with `build_<name>()` + `run_<name>()` → re-export in `workflows/<name>/__init__.py` and `workflows/__init__.py` → wrapper in `cli.py` → register in `[project.scripts]`. Document it in `workflows/<name>/README.md` (flow diagram, agent per node, design reasons, run example) and add one row to the README "워크플로" table. Keep per-workflow detail out of README.
+- Benchmark: adapter `benchmarks/<name>.py` (prepare `Problem`s under `WORKSPACE_ROOT`, a `score` function returning `Score`, call `run_suite`) → re-export in `benchmarks/__init__.py` → `cli.py` command → `[project.scripts]`. Update README "벤치마크" and the settings table.
 
 ## Keeping docs in sync
 
