@@ -3,7 +3,12 @@
 import os
 from pathlib import Path
 
-ROOT = Path(os.getenv("WORKSPACE_ROOT", ".")).expanduser().resolve()
+# 지정하지 않으면 프로젝트 안의 workspace/를 만들어 쓴다. 에이전트가 프로젝트 소스를 건드리지 않게 한다.
+DEFAULT_ROOT = Path(__file__).resolve().parent.parent / "workspace"
+
+ROOT = Path(os.getenv("WORKSPACE_ROOT") or DEFAULT_ROOT).expanduser().resolve()
+if ROOT == DEFAULT_ROOT:
+    ROOT.mkdir(exist_ok=True)
 SKIP_DIRS = {".git", ".venv", "__pycache__", "node_modules"}
 
 

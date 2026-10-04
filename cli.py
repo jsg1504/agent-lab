@@ -14,7 +14,7 @@ from agents import (
     build_reviewer,
 )
 from llm import BASE_URL, MODEL, ConfigError
-from workflows import run_kernel_opt_oneshot
+from workflows import run_kernel_opt_oneshot, run_kernel_opt_orchestrator
 
 
 def _run(build, label: str) -> None:
@@ -72,6 +72,15 @@ def kernel_opt_oneshot() -> None:
         sys.exit("사용법: kernel-opt-oneshot <커널 파일> [요청]")
     try:
         print(run_kernel_opt_oneshot(sys.argv[1], " ".join(sys.argv[2:])))
+    except ConfigError as exc:
+        sys.exit(str(exc))
+
+
+def kernel_opt_orchestrator() -> None:
+    if len(sys.argv) < 2:
+        sys.exit("사용법: kernel-opt-orchestrator <커널 파일> [요청]")
+    try:
+        print(run_kernel_opt_orchestrator(sys.argv[1], " ".join(sys.argv[2:])))
     except ConfigError as exc:
         sys.exit(str(exc))
 

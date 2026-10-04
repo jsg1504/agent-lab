@@ -34,7 +34,7 @@ Config comes from env vars or `.env` (env vars win). `OPENAI_BASE_URL` and `OPEN
 - `agents/base.py` — `build(system_prompt, tools, model=None)` wraps `create_agent` with an `InMemorySaver` checkpointer (conversation memory lives only within the process). `ask(agent, question, thread_id)` invokes the agent, strips everything before the last `</think>`, and if the final content is empty, falls back to listing the `ToolMessage`s from the current turn (`_current_turn` slices after the last `HumanMessage`, since the checkpointer returns prior turns too).
 - `agents/<name>.py` — each is just a `SYSTEM_PROMPT` plus a `build_<name>()` factory calling `build(SYSTEM_PROMPT, <TOOL_LIST>)`. Re-exported from `agents/__init__.py`.
 - `tools/__init__.py` — calls `load_dotenv()` **before** importing tool modules, because modules like `tools/workspace.py` and `tools/bench.py` read env vars at import time. Defines the per-agent lists: `TOOLS`, `RESEARCH_TOOLS`, `CODING_TOOLS`, `OPTIMIZE_TOOLS` (= `CODING_TOOLS`), `EVALUATE_TOOLS`, and `PLAN_TOOLS`/`REVIEW_TOOLS`/`DEBUG_TOOLS` (all = read-only `READ_TOOLS`).
-- `tools/workspace.py` — `ROOT` from `WORKSPACE_ROOT`; `resolve()` returns `None` for paths escaping the root, and every file tool in `code.py`/`bench.py` must check that. `run_command` (`tools/shell.py`) is a raw shell with `cwd=ROOT` and is **not** sandboxed.
+- `tools/workspace.py` — `ROOT` from `WORKSPACE_ROOT`; when unset or empty it defaults to `<project>/workspace/` (created on import, gitignored) so agents don't edit the project source by default; `resolve()` returns `None` for paths escaping the root, and every file tool in `code.py`/`bench.py` must check that. `run_command` (`tools/shell.py`) is a raw shell with `cwd=ROOT` and is **not** sandboxed.
 - `tools/bench.py` — `benchmark`, `compare_outputs`, `compile_check` generate a Python script (a `_PRELUDE` + templated body) and run it in a separate interpreter (`BENCH_PYTHON`, which must have torch; the project venv does not). The script reports back by printing a single JSON line to stdout, which `_run` parses. `.cu` files are checked with `nvcc -c`; `.py` files by importing them.
 
 ## Experiment conventions
@@ -45,7 +45,7 @@ Config comes from env vars or `.env` (env vars win). `OPENAI_BASE_URL` and `OPEN
 
 ## Workflows
 
-- `workflows/<name>/` — a package per workflow. `build_<name>()` assembles a `StateGraph`; `run_<name>(...)` invokes it and returns a report string. Nodes build agents via `agents` factories (once per graph build) and call `ask(agent, question, thread_id)`. Both are re-exported from `workflows/<name>/__init__.py`, then from `workflows/__init__.py`. How a workflow splits into modules is up to that workflow (`kernel_opt_oneshot` keeps everything in `graph.py`).
+- `workflows/<name>/` — a package per workflow. `build_<name>()` assembles a `StateGraph` (or, for an agent-driven workflow, returns the orchestrating agent); `run_<name>(...)` invokes it and returns a report string. Nodes build agents via `agents` factories (once per graph build) and call `ask(agent, question, thread_id)`. Both are re-exported from `workflows/<name>/__init__.py`, then from `workflows/__init__.py`. How a workflow splits into modules is up to that workflow (`kernel_opt_oneshot` keeps everything in `graph.py`; `kernel_opt_orchestrator` splits into `orchestrator.py` and `subagents.py`).
 - Agent memory is keyed by `thread_id`: reuse a thread id to let an agent continue its own conversation across nodes; use distinct ids for parallel branches.
 
 ### `kernel_opt_oneshot`: GPU kernel optimization (one-shot, non-interactive)
@@ -55,6 +55,16 @@ Config comes from env vars or `.env` (env vars win). `OPENAI_BASE_URL` and `OPEN
 - Each branch writes to `<stem>_opt<i><suffix>` so parallel optimizers don't overwrite each other.
 - researcher's tools can't read `WORKSPACE_ROOT`, so the node reads the kernel source itself and inlines it.
 - Branches are picked by parsing planner's `N. [대상] ...` items (`_top_items`), tolerating markdown decoration (`**`, `#`) and ignoring numbered lists without `[대상]` — planner often appends a "다음 단계" list that a plain `^\d+\.` match would pick up. Changing planner's report format breaks this. Fewer than 2 raises with the ranking text.
+
+### `kernel_opt_orchestrator`: one orchestrator agent + three subagents
+
+No `StateGraph`: the orchestrator's own tool-calling loop is the optimization loop. Its only tools are `research`, `optimize`, `evaluate` (`subagents.py`), each wrapping an existing agent (`researcher`, `optimizer`, `evaluator`) via `ask()`. The orchestrator's `SYSTEM_PROMPT` lives in the workflow (`orchestrator.py`), not in `agents/`, because it is unusable without those tools. Things that are easy to break:
+- The subagent tools must stay in the workflow package: `agents/*` import `tools`, so putting them in `tools/` creates an import cycle.
+- Each subagent call gets a fresh `thread_id` and each round writes a new `<stem>_opt<round><suffix>` file — optimizer has been observed to stall when asked to continue editing an existing file. The orchestrator must therefore pass everything a subagent needs in the tool arguments.
+- `research` reads the kernel source itself and inlines it (researcher can't read `WORKSPACE_ROOT`).
+- `_delegate` turns a subagent exception into a returned string so one failing tool (e.g. `web_search`) doesn't kill the loop.
+- `run_kernel_opt_orchestrator` appends the raw delegation log (tool args + subagent answers, read back from the checkpointer) after the orchestrator's summary. That log, not the summary, is the source of truth for measured numbers — keep it.
+- LangGraph's default recursion limit is effectively unbounded (10007), so `RECURSION_LIMIT` is the only code-level stop; `MAX_ROUNDS` is only a prompt instruction.
 
 ### Accelerator optimization loop (human-chained): role split
 

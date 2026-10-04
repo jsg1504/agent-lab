@@ -89,6 +89,7 @@ WORKSPACE_ROOT=~/kernels uv run optimizer    # 대화형
 | 워크플로 | 실행 | 문서 |
 | --- | --- | --- |
 | GPU 커널 최적화 (단발) | `uv run kernel-opt-oneshot <커널> [요청]` | [`workflows/kernel_opt_oneshot/`](workflows/kernel_opt_oneshot/README.md) |
+| GPU 커널 최적화 (오케스트레이터 + 하위 에이전트) | `uv run kernel-opt-orchestrator <커널> [요청]` | [`workflows/kernel_opt_orchestrator/`](workflows/kernel_opt_orchestrator/README.md) |
 | 가속기 최적화 루프 | 사람이 에이전트를 차례로 실행 | [`workflows/accel_opt_manual/`](workflows/accel_opt_manual/README.md) |
 
 ## 실험 기록
@@ -122,6 +123,18 @@ WORKSPACE_ROOT=~/kernels uv run optimizer    # 대화형
 - `evaluator`는 이 문제와 무관하게 안정적이다.
 - `optimizer`는 새 최적화본을 만드는 일은 해내지만, 기존 파일을 이어서 고치는 요청에서 멈추는 것을 반복해서 관측했다.
 - `reviewer`는 파일을 읽은 뒤 빈 응답으로 멈추는 것을 관측했다.
+
+### 오케스트레이터 워크플로 첫 실행 (`glm-5.3-flash`)
+
+- **조건**: `glm-5.3-flash` @ `https://ollama.com/v1`, `kernel-opt-orchestrator`. 오케스트레이터 도구는 `research`, `optimize`, `evaluate`,
+  하위 에이전트(`researcher`, `optimizer`, `evaluator`)의 도구와 프롬프트는 그대로
+- **과제와 판정**: 행 루프와 `.item()`으로 짠 `softmax_rows`를 "GPU에서 빠르게. 입력은 torch.randn(512,1024,device='cuda')".
+  세 하위 에이전트를 모두 거쳐 끝나고, 보고의 수치가 위임 기록의 evaluator 원문과 일치하면 성공
+- **결과**: 측정 환경을 갖춘 실행 1회, 성공 1/1. 1라운드에서 멈췄다. research → optimize → evaluate 한 번씩,
+  `max_abs_err=7.451e-09`, 48.07ms → 0.033ms. 약 1분 30초
+- **해석**: 구조가 끝까지 돈다는 것만 말할 수 있다. 1회라 안정성은 말할 수 없고, 과제가 쉬워 2라운드 이상(실패 뒤 지시를 고쳐 다시 도는 경로)은
+  확인하지 못했다. 그 전 실행에서 `web_search`가 예외를 내 researcher가 실패했을 때는 오케스트레이터가 조사 없이 진행했고,
+  측정용 인터프리터에 torch가 없었을 때는 수치를 지어내지 않고 "채택 없음"으로 보고했다.
 
 ## 확장하기
 
@@ -187,7 +200,7 @@ cp .env.example .env
 | `OPENAI_MODEL` | (필수) | 모델 이름 |
 | `OPENAI_API_KEY` | (없음) | 인증이 필요한 서버에서만 지정한다. 비워 두면 자리 표시자가 들어간다 |
 | `DOCS_ROOT` | `.` | researcher가 조사할 로컬 디렉터리 |
-| `WORKSPACE_ROOT` | `.` | coder와 optimizer가 파일을 고치고 명령을 실행할 디렉터리. evaluator, planner, reviewer, debugger도 이 아래를 읽는다 |
+| `WORKSPACE_ROOT` | 프로젝트의 `workspace/` | 지정하지 않으면 이 디렉터리를 만들어 쓴다(git에는 올리지 않는다). coder와 optimizer가 파일을 고치고 명령을 실행할 디렉터리. evaluator, planner, reviewer, debugger도 이 아래를 읽는다 |
 | `BENCH_PYTHON` | `python3` | evaluator가 측정을 돌릴 파이썬. torch가 있어야 한다 |
 
 연결 예시:
@@ -227,6 +240,11 @@ workflows/
   kernel_opt_oneshot/    GPU 커널 최적화 (단발)
     __init__.py         재노출
     graph.py            그래프
+    README.md           설명
+  kernel_opt_orchestrator/  GPU 커널 최적화 (오케스트레이터 1 + 하위 에이전트 3)
+    __init__.py         재노출
+    orchestrator.py     오케스트레이터 에이전트와 실행
+    subagents.py        하위 에이전트를 감싼 도구
     README.md           설명
   accel_opt_manual/     가속기 최적화 루프 (사람이 이음)
     README.md           설명

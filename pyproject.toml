@@ -24,6 +24,7 @@ planner = "cli:planner"
 reviewer = "cli:reviewer"
 debugger = "cli:debugger"
 kernel-opt-oneshot = "cli:kernel_opt_oneshot"
+kernel-opt-orchestrator = "cli:kernel_opt_orchestrator"
 
 [build-system]
 requires = ["hatchling"]
