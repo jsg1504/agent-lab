@@ -3,6 +3,7 @@
 import httpx
 from bs4 import BeautifulSoup
 from ddgs import DDGS
+from ddgs.exceptions import DDGSException
 from langchain_core.tools import tool
 
 MAX_RESULTS = 5
@@ -13,7 +14,10 @@ TIMEOUT = 15
 @tool
 def web_search(query: str) -> str:
     """웹을 검색해 상위 결과의 제목, URL, 요약을 반환한다."""
-    results = DDGS().text(query, max_results=MAX_RESULTS)
+    try:
+        results = DDGS().text(query, max_results=MAX_RESULTS)
+    except DDGSException as exc:
+        return f"검색하지 못했습니다: {exc} 검색어를 바꿔 다시 검색하라."
     if not results:
         return "검색 결과가 없습니다."
     return "\n\n".join(f"{r['title']}\n{r['href']}\n{r['body']}" for r in results)

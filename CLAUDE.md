@@ -62,7 +62,7 @@ No `StateGraph`: the orchestrator's own tool-calling loop is the optimization lo
 - The subagent tools must stay in the workflow package: `agents/*` import `tools`, so putting them in `tools/` creates an import cycle.
 - Each subagent call gets a fresh `thread_id` and each round writes a new `<stem>_opt<round><suffix>` file — optimizer has been observed to stall when asked to continue editing an existing file. The orchestrator must therefore pass everything a subagent needs in the tool arguments.
 - `research` reads the kernel source itself and inlines it (researcher can't read `WORKSPACE_ROOT`).
-- `_delegate` turns a subagent exception into a returned string so one failing tool (e.g. `web_search`) doesn't kill the loop.
+- `_delegate` turns a subagent exception into a returned string so one failing tool doesn't kill the loop. (`web_search` used to be the example: ddgs raises `DDGSException` on zero results instead of returning `[]`; it now catches that and returns a "change the query" string.)
 - `run_kernel_opt_orchestrator` appends the raw delegation log (tool args + subagent answers, read back from the checkpointer) after the orchestrator's summary. That log, not the summary, is the source of truth for measured numbers — keep it.
 - LangGraph's default recursion limit is effectively unbounded (10007), so `RECURSION_LIMIT` is the only code-level stop; `MAX_ROUNDS` is only a prompt instruction.
 
