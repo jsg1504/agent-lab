@@ -19,13 +19,15 @@ LangChain `create_agent` 위에 만들었고 OpenAI 호환 API라면 어디에�
 ## 빠른 시작
 
 - Python 3.13, [uv](https://docs.astral.sh/uv/)
-- OpenAI 호환 엔드포인트 하나. 기본값은 로컬 [Ollama](https://ollama.com)(`http://localhost:11434/v1`)를 가리킨다.
+- OpenAI 호환 엔드포인트 하나. 예: 로컬 [Ollama](https://ollama.com)(`http://localhost:11434/v1`)
 
 ```bash
 uv sync
-ollama pull qwen3.5:9b    # 기본값 그대로 Ollama를 쓴다면
+cp .env.example .env      # OPENAI_BASE_URL과 OPENAI_MODEL을 채운다
 uv run agent "지금 몇 시야?"
 ```
+
+`OPENAI_BASE_URL`과 `OPENAI_MODEL`은 기본값이 없다. 비어 있으면 어느 값이 없는지 알려주고 끝난다.
 
 모든 명령은 **질문을 인자로 주면 한 번 답하고 끝나고, 인자 없이 실행하면 대화형으로 들어간다**(종료: Ctrl-D).
 
@@ -167,7 +169,7 @@ calc.py의 add 함수를 return a - b에서 return a + b로 고쳤습니다.
 
 ## 설정
 
-`.env` 파일 또는 환경 변수로 설정한다. 모두 선택 사항이다.
+`.env` 파일 또는 환경 변수로 설정한다. `OPENAI_BASE_URL`과 `OPENAI_MODEL`은 필수이고 나머지는 선택 사항이다.
 
 ```bash
 cp .env.example .env
@@ -177,8 +179,8 @@ cp .env.example .env
 
 | 변수 | 기본값 | 설명 |
 | --- | --- | --- |
-| `OPENAI_BASE_URL` | `http://localhost:11434/v1` | OpenAI 호환 엔드포인트 |
-| `OPENAI_MODEL` | `qwen3.5:9b` | 모델 이름 |
+| `OPENAI_BASE_URL` | (필수) | OpenAI 호환 엔드포인트 |
+| `OPENAI_MODEL` | (필수) | 모델 이름 |
 | `OPENAI_API_KEY` | (없음) | 인증이 필요한 서버에서만 지정한다. 비워 두면 자리 표시자가 들어간다 |
 | `DOCS_ROOT` | `.` | researcher가 조사할 로컬 디렉터리 |
 | `WORKSPACE_ROOT` | `.` | coder와 optimizer가 파일을 고치고 명령을 실행할 디렉터리. evaluator, planner, reviewer, debugger도 이 아래를 읽는다 |
@@ -187,8 +189,8 @@ cp .env.example .env
 연결 예시:
 
 ```bash
-# 로컬 Ollama, 다른 모델
-OPENAI_MODEL=qwen2.5:3b-instruct uv run agent "안녕"
+# 로컬 Ollama
+OPENAI_BASE_URL=http://localhost:11434/v1 OPENAI_MODEL=qwen2.5:3b-instruct uv run agent "안녕"
 
 # vLLM 등 인증 없는 서버
 OPENAI_BASE_URL=http://192.168.0.10:8000/v1 OPENAI_MODEL=my-model \
@@ -231,7 +233,7 @@ tools/
 
 ### 빈 응답으로 멈추는 문제
 
-기본 모델 `qwen3.5:9b`는 추론형 모델이다. Ollama는 응답을 `content`와 `reasoning` 두 필드로 나눠 주는데,
+지금까지 실험에 쓴 `qwen3.5:9b`는 추론형 모델이다. Ollama는 응답을 `content`와 `reasoning` 두 필드로 나눠 주는데,
 이 모델은 **`reasoning`에만 쓰고 `content`를 비워 보낼 때가 있다**. 빈 메시지인데도 출력 토큰이
 90개 넘게 잡히는 것으로 확인했다. 그러면 에이전트 루프는 "할 말도 부를 도구도 없다"로 읽고 작업 도중에 멈춘다.
 `langchain-openai`는 `reasoning` 필드를 버리므로 우리 쪽에는 아무 정보도 남지 않는다.

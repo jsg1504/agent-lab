@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-`agent-lab`: a repo for experimenting with LLM agent designs by combining tools, agents, and workflows. Built on LangChain `create_agent`, talking to any OpenAI-compatible endpoint (default: local Ollama, `qwen3.5:9b`).
+`agent-lab`: a repo for experimenting with LLM agent designs by combining tools, agents, and workflows. Built on LangChain `create_agent`, talking to any OpenAI-compatible endpoint. `OPENAI_BASE_URL` and `OPENAI_MODEL` have no defaults; experiments so far used local Ollama with `qwen3.5:9b`.
 
 Three layers, plus a record of results:
 - **Tool** — a `@tool` function in `tools/`. The smallest part.
@@ -26,7 +26,7 @@ WORKSPACE_ROOT=~/kernels uv run kernel-opt-oneshot slow.py "요청"  # run a wor
 
 Entry points are `[project.scripts]` in `pyproject.toml` → functions in `cli.py`. There is no test suite, linter, or formatter configured. Verify changes by running the relevant agent against a real endpoint.
 
-Config comes from env vars or `.env` (env vars win): `OPENAI_BASE_URL`, `OPENAI_MODEL`, `OPENAI_API_KEY`, `DOCS_ROOT`, `WORKSPACE_ROOT`, `BENCH_PYTHON`. See `.env.example`.
+Config comes from env vars or `.env` (env vars win). `OPENAI_BASE_URL` and `OPENAI_MODEL` are required: `build_llm()` raises `ConfigError` when either is missing or empty, and `cli.py` turns it into an exit message. Optional: `OPENAI_API_KEY`, `DOCS_ROOT`, `WORKSPACE_ROOT`, `BENCH_PYTHON`. See `.env.example`.
 
 ## Architecture
 
@@ -69,4 +69,4 @@ This is a deliberate role separation: `optimizer` edits code but has no measurem
 
 ## Known model limitation (important when debugging)
 
-The default `qwen3.5:9b` is a reasoning model; Ollama sometimes returns output only in the `reasoning` field with empty `content`, which `langchain-openai` discards, so the agent loop stops mid-task. Whether this happens varies non-monotonically with the tool list composition (documented in README "실험 기록" and "알려진 한계"). The order of `CODING_TOOLS` is intentional — don't reorder or add/remove tools expecting a fix, and don't attribute empty responses to tool bugs. The real fix is a larger or non-reasoning model via `OPENAI_MODEL`.
+`qwen3.5:9b`, the model used in experiments so far, is a reasoning model; Ollama sometimes returns output only in the `reasoning` field with empty `content`, which `langchain-openai` discards, so the agent loop stops mid-task. Whether this happens varies non-monotonically with the tool list composition (documented in README "실험 기록" and "알려진 한계"). The order of `CODING_TOOLS` is intentional — don't reorder or add/remove tools expecting a fix, and don't attribute empty responses to tool bugs. The real fix is a larger or non-reasoning model via `OPENAI_MODEL`.
