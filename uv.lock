@@ -12,6 +12,7 @@ dependencies = [
     { name = "httpx" },
     { name = "langchain" },
     { name = "langchain-openai" },
+    { name = "langgraph" },
     { name = "python-dotenv" },
 ]
 
@@ -22,6 +23,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "langchain", specifier = ">=1.4.0" },
     { name = "langchain-openai", specifier = ">=1.6.2" },
+    { name = "langgraph", specifier = ">=1.2.11" },
     { name = "python-dotenv", specifier = ">=1.2.3" },
 ]
 
