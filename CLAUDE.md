@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Three layers, plus a record of results:
 - **Tool** — a `@tool` function in `tools/`. The smallest part.
 - **Agent** — a system prompt plus a tool list, in `agents/`. Currently eight: `agent` (general assistant), `researcher`, `coder`, and `planner`, `optimizer`, `reviewer`, `evaluator`, `debugger`.
-- **Workflow** — how agents are chained. LangGraph graphs live in `workflows/`; each workflow is documented in `workflows/<name>.md` (human-chained ones have only the `.md`), and README "워크플로" is just an index table.
+- **Workflow** — how agents are chained. Each workflow is a directory `workflows/<name>/`, documented in its `README.md` (human-chained ones have only the `README.md`), and README "워크플로" is just an index table.
 - **Experiment record** — README "실험 기록": which combination produced which result.
 
 Everything user-facing — system prompts, tool docstrings, tool return strings, comments, README, commit messages — is written in Korean; keep it that way.
@@ -41,11 +41,11 @@ Config comes from env vars or `.env` (env vars win). `OPENAI_BASE_URL` and `OPEN
 
 - Tool lists and system prompts are the experimental variables. When changing them for an experiment, record the result in README "실험 기록" using its format (조건 / 과제와 판정 / 결과 / 해석) — include model, endpoint, tool composition, repeat count, and how success was judged.
 - Keep agents small: one module = `SYSTEM_PROMPT` + factory. Put behavior in tools or workflows, not in agent modules.
-- Role separation is a property of a **workflow**, not a repo-wide rule. Another workflow may split roles differently; document its split and the reason in its `workflows/<name>.md`.
+- Role separation is a property of a **workflow**, not a repo-wide rule. Another workflow may split roles differently; document its split and the reason in its `workflows/<name>/README.md`.
 
 ## Workflows
 
-- `workflows/<name>.py` — `build_<name>()` assembles a `StateGraph`; `run_<name>(...)` invokes it and returns a report string. Nodes build agents via `agents` factories (once per graph build) and call `ask(agent, question, thread_id)`. Re-exported from `workflows/__init__.py`.
+- `workflows/<name>/` — a package per workflow. `build_<name>()` assembles a `StateGraph`; `run_<name>(...)` invokes it and returns a report string. Nodes build agents via `agents` factories (once per graph build) and call `ask(agent, question, thread_id)`. Both are re-exported from `workflows/<name>/__init__.py`, then from `workflows/__init__.py`. How a workflow splits into modules is up to that workflow (`kernel_opt_oneshot` keeps everything in `graph.py`).
 - Agent memory is keyed by `thread_id`: reuse a thread id to let an agent continue its own conversation across nodes; use distinct ids for parallel branches.
 
 ### `kernel_opt_oneshot`: GPU kernel optimization (one-shot, non-interactive)
@@ -65,11 +65,11 @@ This is a deliberate role separation: `optimizer` edits code but has no measurem
 - Tool: `@tool` function in a `tools/` module → import in `tools/__init__.py` and add to the right list.
 - Agent: module in `agents/` with `SYSTEM_PROMPT` + factory → re-export in `agents/__init__.py` → `_run(factory, "label")` wrapper in `cli.py` → register in `[project.scripts]`. Also update the README "카탈로그" tables and "구조" section.
 - Tool list: define in `tools/__init__.py` and add it to README "카탈로그 > 도구 목록".
-- Workflow: module in `workflows/` with `build_<name>()` + `run_<name>()` → re-export in `workflows/__init__.py` → wrapper in `cli.py` → register in `[project.scripts]`. Document it in `workflows/<name>.md` (flow diagram, agent per node, design reasons, run example) and add one row to the README "워크플로" table. Keep per-workflow detail out of README.
+- Workflow: package `workflows/<name>/` with `build_<name>()` + `run_<name>()` → re-export in `workflows/<name>/__init__.py` and `workflows/__init__.py` → wrapper in `cli.py` → register in `[project.scripts]`. Document it in `workflows/<name>/README.md` (flow diagram, agent per node, design reasons, run example) and add one row to the README "워크플로" table. Keep per-workflow detail out of README.
 
 ## Keeping docs in sync
 
-After any change, check whether it makes something in README, CLAUDE.md, `workflows/<name>.md`, or `.env.example` stale, or adds something users need to know: a new or removed setting, a changed default, new error behavior, a new parameter meant to be used, or a changed command. Update those docs in the same commit, and report which docs you updated (or that none needed it). README is for users: describe how to use the change, not how it is implemented. Experiment records describe past runs; don't rewrite them to match current code.
+After any change, check whether it makes something in README, CLAUDE.md, `workflows/<name>/README.md`, or `.env.example` stale, or adds something users need to know: a new or removed setting, a changed default, new error behavior, a new parameter meant to be used, or a changed command. Update those docs in the same commit, and report which docs you updated (or that none needed it). README is for users: describe how to use the change, not how it is implemented. Experiment records describe past runs; don't rewrite them to match current code.
 
 ## Known model limitation (important when debugging)
 

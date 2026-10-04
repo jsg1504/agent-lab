@@ -1,6 +1,6 @@
 # GPU 커널 최적화 단발 (`kernel-opt-oneshot`)
 
-모듈: [`kernel_opt_oneshot.py`](kernel_opt_oneshot.py)
+모듈: [`graph.py`](graph.py)
 
 커널 파일 하나를 받아 최적화 후보 2개를 병렬로 만들고 검토까지 한다. 대화형이 아니다. 한 번 실행하면 끝까지 돌고 끝난다.
 

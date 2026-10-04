@@ -83,13 +83,13 @@ WORKSPACE_ROOT=~/kernels uv run optimizer    # 대화형
 
 ## 워크플로
 
-워크플로마다 `workflows/`에 설명 문서(`.md`)를 둔다. LangGraph 그래프로 잇는 것은 같은 이름의 모듈(`.py`)이 함께 있고,
+워크플로마다 `workflows/<이름>/` 디렉터리를 두고, 설명 문서는 그 안의 `README.md`다. LangGraph 그래프로 잇는 것은 코드가 함께 있고,
 사람이 잇는 것은 문서만 있다.
 
 | 워크플로 | 실행 | 문서 |
 | --- | --- | --- |
-| GPU 커널 최적화 (단발) | `uv run kernel-opt-oneshot <커널> [요청]` | [`workflows/kernel_opt_oneshot.md`](workflows/kernel_opt_oneshot.md) |
-| 가속기 최적화 루프 | 사람이 에이전트를 차례로 실행 | [`workflows/accel_opt_manual.md`](workflows/accel_opt_manual.md) |
+| GPU 커널 최적화 (단발) | `uv run kernel-opt-oneshot <커널> [요청]` | [`workflows/kernel_opt_oneshot/`](workflows/kernel_opt_oneshot/README.md) |
+| 가속기 최적화 루프 | 사람이 에이전트를 차례로 실행 | [`workflows/accel_opt_manual/`](workflows/accel_opt_manual/README.md) |
 
 ## 실험 기록
 
@@ -144,13 +144,13 @@ WORKSPACE_ROOT=~/kernels uv run optimizer    # 대화형
 
 ### 워크플로 추가
 
-1. `workflows/`에 모듈을 만들고 그래프를 조립하는 `build_<이름>()`과 실행해 결과를 문자열로 돌려주는 `run_<이름>()`을 쓴다.
-   노드 안에서는 `agents`의 팩토리로 에이전트를 만들고 `ask()`로 부른다.
-2. `workflows/__init__.py`에서 재노출한다.
+1. `workflows/<이름>/` 디렉터리를 만들고, 그 안에 그래프를 조립하는 `build_<이름>()`과 실행해 결과를 문자열로 돌려주는 `run_<이름>()`을 쓴다.
+   노드 안에서는 `agents`의 팩토리로 에이전트를 만들고 `ask()`로 부른다. 모듈을 어떻게 나눌지는 워크플로마다 정한다.
+2. `workflows/<이름>/__init__.py`에서 두 함수를 재노출하고, `workflows/__init__.py`에서 다시 재노출한다.
 3. 명령으로 쓰려면 `cli.py`에 함수를 만들고 `[project.scripts]`에 등록한다.
-4. `workflows/<이름>.md`에 흐름도, 노드별 에이전트와 하는 일, 설계 이유, 실행 예시를 적고, 이 README의 [워크플로](#워크플로) 표에 한 줄 추가한다.
+4. `workflows/<이름>/README.md`에 흐름도, 노드별 에이전트와 하는 일, 설계 이유, 실행 예시를 적고, 이 README의 [워크플로](#워크플로) 표에 한 줄 추가한다.
 
-사람이 잇는 워크플로는 코드 없이 4번의 문서만 둔다.
+사람이 잇는 워크플로는 코드 없이 `workflows/<이름>/README.md`만 둔다.
 
 ## 대화 기억
 
@@ -224,9 +224,12 @@ agents/
   debugger.py       진단 담당
 workflows/
   __init__.py       워크플로 재노출
-  kernel_opt_oneshot.py  GPU 커널 최적화 (단발)
-  kernel_opt_oneshot.md  그 설명
-  accel_opt_manual.md    가속기 최적화 루프 설명 (사람이 이음)
+  kernel_opt_oneshot/    GPU 커널 최적화 (단발)
+    __init__.py         재노출
+    graph.py            그래프
+    README.md           설명
+  accel_opt_manual/     가속기 최적화 루프 (사람이 이음)
+    README.md           설명
 tools/
   __init__.py       도구 목록 정의
   workspace.py      WORKSPACE_ROOT와 경로 봉쇄 (code/shell/bench 공용)
