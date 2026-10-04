@@ -29,7 +29,8 @@ uv run agent "지금 몇 시야?"
 
 `OPENAI_BASE_URL`과 `OPENAI_MODEL`은 기본값이 없다. 비어 있으면 어느 값이 없는지 알려주고 끝난다.
 
-모든 명령은 **질문을 인자로 주면 한 번 답하고 끝나고, 인자 없이 실행하면 대화형으로 들어간다**(종료: Ctrl-D).
+에이전트 명령은 **질문을 인자로 주면 한 번 답하고 끝나고, 인자 없이 실행하면 대화형으로 들어간다**(종료: Ctrl-D).
+워크플로 명령은 한 번 실행하고 끝난다.
 
 ```bash
 uv run researcher "LangChain의 create_agent는 어떤 인자를 받아?"
@@ -71,7 +72,7 @@ WORKSPACE_ROOT=~/kernels uv run optimizer    # 대화형
 | 모듈 | 도구 | 비고 |
 | --- | --- | --- |
 | `clock.py` | `get_current_time` | |
-| `files.py` | `list_files` | |
+| `files.py` | `list_files` | `WORKSPACE_ROOT` 제한 없이 아무 디렉터리나 본다 |
 | `web.py` | `web_search`, `fetch_page` | 외부 네트워크 필요. 검색 API 키는 필요 없다 |
 | `docs.py` | `list_docs`, `search_docs`, `read_doc` | `DOCS_ROOT` 아래만 본다 |
 | `code.py` | `read_file`, `edit_file`, `write_file`, `list_dir`, `glob_files`, `grep_files` | `WORKSPACE_ROOT` 밖을 거부한다 |
@@ -137,6 +138,9 @@ WORKSPACE_ROOT=~/kernels uv run optimizer    # 대화형
 2. `agents/__init__.py`에서 재노출한다.
 3. 명령으로 쓰려면 `cli.py`에 `_run(팩토리, "이름")` 함수를 하나 만들고 `[project.scripts]`에 등록한다.
 4. 이 README의 [카탈로그](#카탈로그) 표에 추가한다.
+
+모델은 기본으로 `OPENAI_MODEL`을 쓴다. 에이전트마다 다른 모델을 쓰려면 `build(SYSTEM_PROMPT, 도구목록, model="모델 이름")`처럼
+`model`을 넘긴다. 엔드포인트(`OPENAI_BASE_URL`)는 모두 같은 것을 쓰므로 그 서버가 제공하는 모델이어야 한다.
 
 ### 워크플로 추가
 
@@ -204,8 +208,8 @@ OPENAI_BASE_URL=https://api.example.com/v1 OPENAI_API_KEY=sk-... OPENAI_MODEL=gp
 ## 구조
 
 ```
-cli.py              명령줄 진입점 (에이전트마다 하나)
-llm.py              OpenAI 호환 API 연결 (ChatOpenAI)
+cli.py              명령줄 진입점 (에이전트와 워크플로마다 하나)
+llm.py              OpenAI 호환 API 연결 (ChatOpenAI), 필수 설정 확인
 .env.example        환경 변수 틀
 agents/
   __init__.py       에이전트 재노출
