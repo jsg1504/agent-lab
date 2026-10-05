@@ -17,6 +17,7 @@ from tools.code import (
 )
 from tools.docs import list_docs, read_doc, search_docs
 from tools.files import list_files
+from tools.npu_wiki import read_wiki_page, search_wiki
 from tools.shell import run_command
 from tools.web import fetch_page, web_search
 
@@ -30,6 +31,9 @@ RESEARCH_TOOLS = [
     read_doc,
     get_current_time,
 ]
+
+# NPU wiki만 근거로 조사한다. web 도구를 두지 않는다: 사내 용어가 검색어로 새지 않게 하고, wiki의 효과만 따로 보기 위해서다.
+NPU_RESEARCH_TOOLS = [search_wiki, read_wiki_page]
 
 # 자주 쓰는 것을 앞에 둔다. 목록을 바꾸면 결과가 달라지는 일이 있으나
 # 원인은 도구 자체가 아니라 모델 쪽에 있다. README의 '알려진 한계' 참고.

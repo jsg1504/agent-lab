@@ -17,6 +17,7 @@ dependencies = [
 [project.scripts]
 agent = "cli:main"
 researcher = "cli:researcher"
+npu-researcher = "cli:npu_researcher"
 coder = "cli:coder"
 optimizer = "cli:optimizer"
 evaluator = "cli:evaluator"

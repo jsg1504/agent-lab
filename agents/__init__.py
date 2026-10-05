@@ -5,6 +5,7 @@ from agents.base import ask
 from agents.coder import build_coder
 from agents.debugger import build_debugger
 from agents.evaluator import build_evaluator
+from agents.npu_researcher import build_npu_researcher
 from agents.optimizer import build_optimizer
 from agents.planner import build_planner
 from agents.researcher import build_researcher
@@ -16,6 +17,7 @@ __all__ = [
     "build_coder",
     "build_debugger",
     "build_evaluator",
+    "build_npu_researcher",
     "build_optimizer",
     "build_planner",
     "build_researcher",

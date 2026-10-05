@@ -9,6 +9,7 @@ from agents import (
     build_coder,
     build_debugger,
     build_evaluator,
+    build_npu_researcher,
     build_optimizer,
     build_planner,
     build_researcher,
@@ -43,6 +44,10 @@ def main() -> None:
 
 def researcher() -> None:
     _run(build_researcher, "researcher")
+
+
+def npu_researcher() -> None:
+    _run(build_npu_researcher, "npu_researcher")
 
 
 def coder() -> None:

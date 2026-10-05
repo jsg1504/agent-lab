@@ -47,6 +47,7 @@ WORKSPACE_ROOT=~/kernels uv run optimizer    # 대화형
 | --- | --- | --- |
 | `uv run agent` | 일반 어시스턴트 | `TOOLS` |
 | `uv run researcher` | 조사 담당. 웹과 로컬 문서를 근거로 답하고 출처를 밝힌다 | `RESEARCH_TOOLS` |
+| `uv run npu-researcher` | NPU 조사 담당. `NPU_WIKI_ROOT`의 NPU wiki만 근거로 답하고 페이지 id를 밝힌다. 웹은 보지 않는다 | `NPU_RESEARCH_TOOLS` |
 | `uv run coder` | 코딩 담당. `WORKSPACE_ROOT` 안에서 파일을 고치고 셸 명령을 실행한다 | `CODING_TOOLS` |
 | `uv run planner` | 계획 담당. 프로파일, 분석적 상한, 채택/반려 기록을 보고 후보 가설을 순위대로 낸다 | `PLAN_TOOLS` |
 | `uv run optimizer` | 최적화 담당. 딥러닝 모델과 커널 코드를 고쳐 지연을 줄인다 | `OPTIMIZE_TOOLS` |
@@ -62,6 +63,7 @@ WORKSPACE_ROOT=~/kernels uv run optimizer    # 대화형
 | --- | --- |
 | `TOOLS` | `get_current_time`, `list_files` |
 | `RESEARCH_TOOLS` | `web_search`, `fetch_page`, `list_docs`, `search_docs`, `read_doc`, `get_current_time` |
+| `NPU_RESEARCH_TOOLS` | `search_wiki`, `read_wiki_page` |
 | `CODING_TOOLS` | `read_file`, `edit_file`, `run_command`, `list_dir`, `write_file`, `grep_files`, `glob_files` |
 | `OPTIMIZE_TOOLS` | `CODING_TOOLS`와 같다 |
 | `EVALUATE_TOOLS` | `read_file`, `compile_check`, `benchmark`, `compare_outputs`, `list_dir`, `glob_files` |
@@ -76,9 +78,26 @@ WORKSPACE_ROOT=~/kernels uv run optimizer    # 대화형
 | `files.py` | `list_files` | `WORKSPACE_ROOT` 제한 없이 아무 디렉터리나 본다 |
 | `web.py` | `web_search`, `fetch_page` | 외부 네트워크 필요. 검색 API 키는 필요 없다 |
 | `docs.py` | `list_docs`, `search_docs`, `read_doc` | `DOCS_ROOT` 아래만 본다 |
+| `npu_wiki.py` | `search_wiki`, `read_wiki_page` | `NPU_WIKI_ROOT` 아래만 본다 |
 | `code.py` | `read_file`, `edit_file`, `write_file`, `list_dir`, `glob_files`, `grep_files` | `WORKSPACE_ROOT` 밖을 거부한다 |
 | `shell.py` | `run_command` | `WORKSPACE_ROOT`에서 실행하지만 **샌드박스가 아니다** |
 | `bench.py` | `compile_check`, `benchmark`, `compare_outputs` | `BENCH_PYTHON`에서 돈다 |
+
+NPU wiki는 마크다운 페이지를 모아 둔 디렉터리다. 페이지 앞머리의 frontmatter에서 `id`, `title`, `tags`, `aliases`, `confidence`를 읽고, `search_wiki`는 제목·id, 태그·별칭, 본문 순으로 가중치를 두어 찾는다. frontmatter가 없으면 경로가 id, 첫 `#` 제목이 title이 된다. `read_wiki_page`는 앞 4000자만 돌려주므로 결론을 페이지 앞쪽에 둔다.
+
+```markdown
+---
+id: hw-dma-engine
+title: DMA 엔진
+tags: [dma, memory]
+aliases:
+  - TMA
+  - 데이터 이동 엔진
+confidence: verified
+---
+
+DMA 엔진은 DRAM과 온칩 SRAM 사이 블록 전송을 맡는다. ...
+```
 
 > `coder`와 `optimizer`는 파일을 덮어쓰고 셸 명령을 실행한다. 되돌릴 수 있는 곳(버전 관리 중인 디렉터리)에서 쓰는 편이 안전하다.
 
@@ -285,6 +304,7 @@ cp .env.example .env
 | `OPENAI_MODEL` | (필수) | 모델 이름 |
 | `OPENAI_API_KEY` | (없음) | 인증이 필요한 서버에서만 지정한다. 비워 두면 자리 표시자가 들어간다 |
 | `DOCS_ROOT` | `.` | researcher가 조사할 로컬 디렉터리 |
+| `NPU_WIKI_ROOT` | (없음) | npu-researcher가 조사할 NPU wiki 디렉터리. `uv run npu-researcher`에만 필요하다 |
 | `WORKSPACE_ROOT` | 프로젝트의 `workspace/` | 지정하지 않으면 이 디렉터리를 만들어 쓴다(git에는 올리지 않는다). coder와 optimizer가 파일을 고치고 명령을 실행할 디렉터리. evaluator, planner, reviewer, debugger도 이 아래를 읽는다 |
 | `BENCH_PYTHON` | `python3` | evaluator가 측정을 돌릴 파이썬. torch가 있어야 한다 |
 | `KERNELBENCH_ROOT` | (없음) | KernelBench 저장소 경로. `uv run kernelbench`에만 필요하다 |
@@ -319,6 +339,7 @@ agents/
   base.py           build() / ask() 공통, 대화 기억
   assistant.py      일반 어시스턴트
   researcher.py     조사 담당
+  npu_researcher.py NPU 조사 담당 (NPU wiki만 근거)
   coder.py          코딩 담당
   planner.py        계획 담당
   optimizer.py      최적화 담당
@@ -345,7 +366,7 @@ benchmarks/
 tools/
   __init__.py       도구 목록 정의
   workspace.py      WORKSPACE_ROOT와 경로 봉쇄 (code/shell/bench 공용)
-  clock.py, files.py, web.py, docs.py, code.py, shell.py, bench.py
+  clock.py, files.py, web.py, docs.py, npu_wiki.py, code.py, shell.py, bench.py
 ```
 
 ## 알려진 한계
