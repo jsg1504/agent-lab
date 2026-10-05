@@ -7,4 +7,4 @@ SYSTEM_PROMPT = "너는 도움이 되는 어시스턴트다. 필요하면 주어
 
 
 def build_agent():
-    return build(SYSTEM_PROMPT, TOOLS)
+    return build(SYSTEM_PROMPT, TOOLS, name="assistant")

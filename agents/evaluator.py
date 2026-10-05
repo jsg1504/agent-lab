@@ -24,4 +24,4 @@ benchmark와 compare_outputs의 setup에는 import와 입력 텐서 생성을 �
 
 
 def build_evaluator():
-    return build(SYSTEM_PROMPT, EVALUATE_TOOLS)
+    return build(SYSTEM_PROMPT, EVALUATE_TOOLS, name="evaluator")

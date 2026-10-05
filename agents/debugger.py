@@ -33,4 +33,4 @@ SYSTEM_PROMPT = """너는 최적화 후보의 진단 담당이다. 코드를 고
 
 
 def build_debugger():
-    return build(SYSTEM_PROMPT, DEBUG_TOOLS)
+    return build(SYSTEM_PROMPT, DEBUG_TOOLS, name="debugger")

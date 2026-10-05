@@ -183,7 +183,8 @@ uv run kernelbench 1 19 23 --workflow oneshot # 단발 워크플로
 
 ### 에이전트 추가
 
-1. `agents/`에 모듈을 만들고 `SYSTEM_PROMPT`와 `build(SYSTEM_PROMPT, 도구목록)`을 호출하는 팩토리를 쓴다.
+1. `agents/`에 모듈을 만들고 `SYSTEM_PROMPT`와 `build(SYSTEM_PROMPT, 도구목록, name="이름")`을 호출하는 팩토리를 쓴다.
+   `name`은 추적 로그에서 이 에이전트를 가리키는 이름이다.
 2. `agents/__init__.py`에서 재노출한다.
 3. 명령으로 쓰려면 `cli.py`에 `_run(팩토리, "이름")` 함수를 하나 만들고 `[project.scripts]`에 등록한다.
 4. 이 README의 [카탈로그](#카탈로그) 표에 추가한다.
@@ -229,6 +230,45 @@ calc.py의 add 함수를 return a - b에서 return a + b로 고쳤습니다.
 실행 사이에도 기억을 남기려면 `langgraph-checkpoint-sqlite`를 설치하고 `agents/base.py`의 `InMemorySaver`를
 `SqliteSaver`로 바꾸면 된다.
 
+## 추적 로그
+
+모든 명령은 실행마다 `traces/<날짜_시각>_<명령>.jsonl` 파일 하나에 다음을 남긴다(경로는 시작할 때 stderr에 나온다).
+
+- 에이전트가 받은 질문과 낸 답. 하위 에이전트라면 누가 불렀는지(`caller`, `parent`)
+- 에이전트가 LLM에 보낸 요청 원문(시스템 프롬프트, 대화, 도구 스키마, 파라미터)과 받은 응답 원문(`reasoning` 포함)
+- LLM 호출마다, 그리고 질문 하나를 답하는 동안의 토큰 사용량(서버가 보고한 `usage`)
+- 모든 줄의 발생 시각(`ts`, 시간대 포함 밀리초). 구간이 있는 줄은 시작 시각(`started_at`)과 걸린 시간(`duration_s`)도
+
+한 줄이 이벤트 하나다.
+
+| `type` | 언제 | 주요 필드 |
+| --- | --- | --- |
+| `run` | 파일 첫 줄 | `argv`, `model`, `base_url` |
+| `ask` | 에이전트가 질문을 받음 | `id`, `agent`, `caller`, `parent`, `thread_id`, `question` |
+| `llm` | LLM 호출 하나가 끝남 | `ask`, `agent`, `started_at`, `duration_s`, `status`, `request`, `response`, `usage` |
+| `answer` | 에이전트가 답함 | `id`, `agent`, `started_at`, `duration_s`, `answer` 또는 `error`, `llm_calls`, `usage` |
+| `mark` | 벤치마크가 문제를 시작함 | `label`(`problem`), `name`, `workflow` |
+
+`answer.usage`는 그 에이전트가 직접 한 LLM 호출의 합계다. 오케스트레이터의 합계에 하위 에이전트 몫은 들어 있지 않다.
+요청 원문에는 매번 대화 전체가 실리므로 긴 실행은 파일이 커진다. 끄려면 `TRACE=0`, 위치를 바꾸려면 `TRACE_DIR`를 지정한다.
+
+`jq`로 보는 예:
+
+```bash
+f=$(ls -t traces/*.jsonl | head -1)
+
+# 누가 누구에게 무엇을 시켰나
+jq -r 'select(.type=="ask") | "\(.ts) #\(.id) \(.caller // "-") -> \(.agent): \(.question[:80])"' $f
+
+# 에이전트별 토큰 합계
+jq -s 'map(select(.type=="answer")) | group_by(.agent)
+       | map({agent: .[0].agent, calls: (map(.llm_calls) | add), tokens: (map(.usage.total_tokens // 0) | add)})' $f
+
+# content가 비고 reasoning만 온 응답 (빈 응답 문제 추적)
+jq -c 'select(.type=="llm") | .response.choices[0].message
+       | select((.content // "") == "" and (.tool_calls | not)) | {reasoning}' $f
+```
+
 ## 설정
 
 `.env` 파일 또는 환경 변수로 설정한다. `OPENAI_BASE_URL`과 `OPENAI_MODEL`은 필수이고 나머지는 선택 사항이다.
@@ -249,6 +289,8 @@ cp .env.example .env
 | `BENCH_PYTHON` | `python3` | evaluator가 측정을 돌릴 파이썬. torch가 있어야 한다 |
 | `KERNELBENCH_ROOT` | (없음) | KernelBench 저장소 경로. `uv run kernelbench`에만 필요하다 |
 | `KERNELBENCH_PYTHON` | `BENCH_PYTHON` | KernelBench 채점을 돌릴 파이썬. KernelBench와 torch가 있어야 한다 |
+| `TRACE` | `1` | `0`이면 [추적 로그](#추적-로그)를 남기지 않는다 |
+| `TRACE_DIR` | 프로젝트의 `traces/` | 추적 로그를 남길 디렉터리(git에는 올리지 않는다) |
 
 연결 예시:
 
@@ -270,6 +312,7 @@ OPENAI_BASE_URL=https://api.example.com/v1 OPENAI_API_KEY=sk-... OPENAI_MODEL=gp
 ```
 cli.py              명령줄 진입점 (에이전트와 워크플로마다 하나)
 llm.py              OpenAI 호환 API 연결 (ChatOpenAI), 필수 설정 확인
+tracing.py          추적 로그 (질문과 답, LLM 요청/응답 원문, 토큰)
 .env.example        환경 변수 틀
 agents/
   __init__.py       에이전트 재노출
@@ -312,7 +355,8 @@ tools/
 지금까지 실험에 쓴 `qwen3.5:9b`는 추론형 모델이다. Ollama는 응답을 `content`와 `reasoning` 두 필드로 나눠 주는데,
 이 모델은 **`reasoning`에만 쓰고 `content`를 비워 보낼 때가 있다**. 빈 메시지인데도 출력 토큰이
 90개 넘게 잡히는 것으로 확인했다. 그러면 에이전트 루프는 "할 말도 부를 도구도 없다"로 읽고 작업 도중에 멈춘다.
-`langchain-openai`는 `reasoning` 필드를 버리므로 우리 쪽에는 아무 정보도 남지 않는다.
+`langchain-openai`는 `reasoning` 필드를 버리므로 에이전트에게는 아무 정보도 남지 않는다.
+다만 [추적 로그](#추적-로그)는 응답 원문을 남기므로 그때 모델이 `reasoning`에 무엇을 썼는지는 거기서 볼 수 있다.
 
 같은 이유로 추론 내용이 `content`로 새어 `</think>`가 섞여 나오기도 한다. `ask()`가 마지막 `</think>`
 뒤만 남겨 걷어내고, `content`가 비면 대신 실행한 도구 목록을 보여준다. 둘 다 증상을 가릴 뿐 원인은 못 막는다.

@@ -13,4 +13,4 @@ SYSTEM_PROMPT = """너는 조사 담당이다. 추측하지 말고 도구로 확
 
 
 def build_researcher():
-    return build(SYSTEM_PROMPT, RESEARCH_TOOLS)
+    return build(SYSTEM_PROMPT, RESEARCH_TOOLS, name="researcher")

@@ -4,15 +4,18 @@ from langchain.agents import create_agent
 from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
+import tracing
 from llm import build_llm
 
 
-def build(system_prompt: str, tools: list, model: str | None = None):
+def build(system_prompt: str, tools: list, model: str | None = None, name: str | None = None):
+    """name은 추적 로그에서 에이전트를 가리키는 이름이다."""
     return create_agent(
         model=build_llm(model),
         tools=tools,
         system_prompt=system_prompt,
         checkpointer=InMemorySaver(),
+        name=name,
     )
 
 
@@ -32,10 +35,16 @@ def _clean(text: str) -> str:
 
 
 def ask(agent, question: str, thread_id: str = "default") -> str:
-    messages = agent.invoke(
-        {"messages": [{"role": "user", "content": question}]},
-        {"configurable": {"thread_id": thread_id}},
-    )["messages"]
+    with tracing.asking(agent.get_name(), thread_id, question) as trace:
+        messages = agent.invoke(
+            {"messages": [{"role": "user", "content": question}]},
+            {"configurable": {"thread_id": thread_id}},
+        )["messages"]
+        trace.answer = _answer(messages)
+    return trace.answer
+
+
+def _answer(messages: list) -> str:
     answer = _clean(str(messages[-1].content))
     if answer:
         return answer

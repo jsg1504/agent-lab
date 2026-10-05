@@ -13,4 +13,4 @@ SYSTEM_PROMPT = """너는 코딩 담당이다. 고치기 전에 먼저 읽는다
 
 
 def build_coder():
-    return build(SYSTEM_PROMPT, CODING_TOOLS)
+    return build(SYSTEM_PROMPT, CODING_TOOLS, name="coder")

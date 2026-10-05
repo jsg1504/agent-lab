@@ -33,4 +33,4 @@ SYSTEM_PROMPT = """너는 최적화 후보의 검토 담당이다. 코드를 고
 
 
 def build_reviewer():
-    return build(SYSTEM_PROMPT, REVIEW_TOOLS)
+    return build(SYSTEM_PROMPT, REVIEW_TOOLS, name="reviewer")

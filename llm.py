@@ -5,6 +5,8 @@ import os
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 
+import tracing
+
 load_dotenv()  # .env가 있으면 읽는다. 이미 설정된 환경 변수가 우선한다.
 
 # 엔드포인트와 모델은 기본값 없이 .env나 환경 변수로 반드시 지정한다.
@@ -31,4 +33,5 @@ def build_llm(model: str | None = None) -> ChatOpenAI:
         base_url=BASE_URL,
         api_key=API_KEY,
         temperature=0,
+        http_client=tracing.http_client(),
     )

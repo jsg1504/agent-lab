@@ -23,4 +23,4 @@ SYSTEM_PROMPT = """너는 딥러닝 성능 최적화 담당이다. 코드를 읽
 
 
 def build_optimizer():
-    return build(SYSTEM_PROMPT, OPTIMIZE_TOOLS)
+    return build(SYSTEM_PROMPT, OPTIMIZE_TOOLS, name="optimizer")

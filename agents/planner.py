@@ -34,4 +34,4 @@ SYSTEM_PROMPT = """너는 가속기 최적화의 계획 담당이다. 코드를 
 
 
 def build_planner():
-    return build(SYSTEM_PROMPT, PLAN_TOOLS)
+    return build(SYSTEM_PROMPT, PLAN_TOOLS, name="planner")

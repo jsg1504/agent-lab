@@ -51,7 +51,8 @@ SYSTEM_PROMPT = f"""너는 GPU 커널 최적화의 총괄이다. 직접 코드�
 
 
 def build_kernel_opt_orchestrator():
-    return build(SYSTEM_PROMPT, build_subagent_tools()).with_config(recursion_limit=RECURSION_LIMIT)
+    agent = build(SYSTEM_PROMPT, build_subagent_tools(), name="orchestrator")
+    return agent.with_config(recursion_limit=RECURSION_LIMIT)
 
 
 def _delegations(messages: list) -> list[str]:

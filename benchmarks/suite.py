@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+import tracing
 from tools.workspace import ROOT
 from workflows import run_kernel_opt_oneshot, run_kernel_opt_orchestrator
 
@@ -62,6 +63,7 @@ def run_suite(
         # 앞 실행이 남긴 후보가 이번 채점에 섞이지 않게 지운다.
         for old in _candidates(problem):
             old.unlink()
+        tracing.mark("problem", name=problem.name, workflow=workflow)
         try:
             report = run(str(problem.path.relative_to(ROOT)), request)
         except Exception as exc:
