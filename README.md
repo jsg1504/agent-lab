@@ -3,7 +3,7 @@
 도구, 에이전트, 워크플로를 조합해 LLM 에이전트 설계를 실험하는 저장소.
 
 부품을 작게 정의해 두고, 어떤 도구를 어떤 에이전트에 주고 에이전트를 어떻게 이으면 일이 되는지를 재 본다.
-LangChain `create_agent` 위에 만들었고 OpenAI 호환 API라면 어디에든 붙는다(로컬 Ollama, vLLM, LM Studio, llama.cpp, OpenAI 본체).
+LangChain `create_agent` 위에 만들었고 OpenAI 호환 API라면 어디에든 붙는다. 엔드포인트와 모델은 정해 두지 않았고 설정으로 고른다.
 
 ## 개념
 
@@ -20,7 +20,7 @@ LangChain `create_agent` 위에 만들었고 OpenAI 호환 API라면 어디에�
 ## 빠른 시작
 
 - Python 3.13, [uv](https://docs.astral.sh/uv/)
-- OpenAI 호환 엔드포인트 하나. 예: 로컬 [Ollama](https://ollama.com)(`http://localhost:11434/v1`)
+- OpenAI 호환 엔드포인트 하나(로컬 서버든 호스팅 API든 상관없다). 연결 예시는 [설정](#설정) 참고
 
 ```bash
 uv sync
@@ -315,12 +315,8 @@ cp .env.example .env
 연결 예시:
 
 ```bash
-# 로컬 Ollama
-OPENAI_BASE_URL=http://localhost:11434/v1 OPENAI_MODEL=qwen2.5:3b-instruct uv run agent "안녕"
-
-# vLLM 등 인증 없는 서버
-OPENAI_BASE_URL=http://192.168.0.10:8000/v1 OPENAI_MODEL=my-model \
-  uv run agent "안녕"
+# 인증 없는 서버 (vLLM, llama.cpp, LM Studio, Ollama 등). 주소와 포트는 서버 설정을 따른다
+OPENAI_BASE_URL=http://localhost:8000/v1 OPENAI_MODEL=my-model uv run agent "안녕"
 
 # 키가 필요한 서버
 OPENAI_BASE_URL=https://api.example.com/v1 OPENAI_API_KEY=sk-... OPENAI_MODEL=gpt-4o-mini \
@@ -373,16 +369,13 @@ tools/
 
 ### 빈 응답으로 멈추는 문제
 
-지금까지 실험에 쓴 `qwen3.5:9b`는 추론형 모델이다. Ollama는 응답을 `content`와 `reasoning` 두 필드로 나눠 주는데,
-이 모델은 **`reasoning`에만 쓰고 `content`를 비워 보낼 때가 있다**. 빈 메시지인데도 출력 토큰이
-90개 넘게 잡히는 것으로 확인했다. 그러면 에이전트 루프는 "할 말도 부를 도구도 없다"로 읽고 작업 도중에 멈춘다.
+추론형 모델은 서버에 따라 응답이 `content`와 `reasoning` 두 필드로 나뉘어 온다. 이때 모델이
+**`reasoning`에만 쓰고 `content`를 비워 보내면** 에이전트 루프는 "할 말도 부를 도구도 없다"로 읽고 작업 도중에 멈춘다.
 `langchain-openai`는 `reasoning` 필드를 버리므로 에이전트에게는 아무 정보도 남지 않는다.
-다만 [추적 로그](#추적-로그)는 응답 원문을 남기므로 그때 모델이 `reasoning`에 무엇을 썼는지는 거기서 볼 수 있다.
 
-같은 이유로 추론 내용이 `content`로 새어 `</think>`가 섞여 나오기도 한다. `ask()`가 마지막 `</think>`
-뒤만 남겨 걷어내고, `content`가 비면 대신 실행한 도구 목록을 보여준다. 둘 다 증상을 가릴 뿐 원인은 못 막는다.
+- **알아보는 법**: 답이 비어 `ask()`가 실행한 도구 목록만 보여주면 이 문제를 의심한다.
+  [추적 로그](#추적-로그)는 응답 원문을 남기므로, 거기 있는 "content가 비고 reasoning만 온 응답" 질의로 확인한다.
+- **해결**: `OPENAI_MODEL`로 다른 모델(더 큰 모델이나 추론형이 아닌 모델)을 쓴다. 도구 목록이나 프롬프트를 손봐서는 고쳐지지 않았다.
+- **증상만 가리는 처리**: 추론 내용이 `content`로 새어 `</think>`가 섞여 나오면 `ask()`가 마지막 `</think>` 뒤만 남긴다.
 
-어느 도구 구성에서 이 문제가 나타나는지는 사실상 임의다([실험 기록](#도구-구성에-따른-빈-응답-qwen359b) 참고).
-
-`/no_think`로 이 모델의 추론을 끌 수 없고, 요청 본문의 `think: false`도 Ollama가 무시한다.
-확실한 해결책은 더 큰 모델이나 추론형이 아닌 모델을 쓰는 것이다. `OPENAI_MODEL`로 바꿀 수 있다.
+모든 모델에서 생기는 문제는 아니다. 관측한 조건과 횟수는 [실험 기록](#도구-구성에-따른-빈-응답-qwen359b)에 있다.

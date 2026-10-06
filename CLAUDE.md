@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-`agent-lab`: a repo for experimenting with LLM agent designs by combining tools, agents, and workflows. Built on LangChain `create_agent`, talking to any OpenAI-compatible endpoint. `OPENAI_BASE_URL` and `OPENAI_MODEL` have no defaults; experiments so far used local Ollama with `qwen3.5:9b`.
+`agent-lab`: a repo for experimenting with LLM agent designs by combining tools, agents, and workflows. Built on LangChain `create_agent`, talking to any OpenAI-compatible endpoint. `OPENAI_BASE_URL` and `OPENAI_MODEL` have no defaults, and the repo is not tied to any server or model — keep README and examples endpoint-neutral; model/endpoint specifics belong only in README "실험 기록" entries.
 
 Three layers, a benchmark harness on top, plus a record of results:
 - **Tool** — a `@tool` function in `tools/`. The smallest part.
@@ -95,4 +95,4 @@ After any change, check whether it makes something in README, CLAUDE.md, `workfl
 
 ## Known model limitation (important when debugging)
 
-`qwen3.5:9b`, the model used in experiments so far, is a reasoning model; Ollama sometimes returns output only in the `reasoning` field with empty `content`, which `langchain-openai` discards, so the agent loop stops mid-task. Whether this happens varies non-monotonically with the tool list composition (documented in README "실험 기록" and "알려진 한계"). The order of `CODING_TOOLS` is intentional — don't reorder or add/remove tools expecting a fix, and don't attribute empty responses to tool bugs. The real fix is a larger or non-reasoning model via `OPENAI_MODEL`.
+With reasoning models, some servers return output only in the `reasoning` field with empty `content`, which `langchain-openai` discards, so the agent loop stops mid-task. Observed with `qwen3.5:9b` on Ollama, where whether it happens varies non-monotonically with the tool list composition (README "실험 기록"; general description in "알려진 한계"). The order of `CODING_TOOLS` is intentional — don't reorder or add/remove tools expecting a fix, and don't attribute empty responses to tool bugs. Check the trace log for empty-`content` responses first; the real fix is a different model via `OPENAI_MODEL`.
