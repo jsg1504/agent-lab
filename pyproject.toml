@@ -27,6 +27,7 @@ debugger = "cli:debugger"
 kernel-opt-oneshot = "cli:kernel_opt_oneshot"
 kernel-opt-orchestrator = "cli:kernel_opt_orchestrator"
 kernelbench = "cli:kernelbench"
+flashinferbench = "cli:flashinferbench"
 
 [build-system]
 requires = ["hatchling"]

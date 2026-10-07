@@ -27,7 +27,7 @@ G = {}
 """
 
 
-def _run(script: str, python: str = BENCH_PYTHON) -> dict:
+def _run(script: str, python: str = BENCH_PYTHON, timeout: int = TIMEOUT) -> dict:
     """준비된 파이썬 스크립트를 측정용 인터프리터로 실행하고 JSON 결과를 받는다."""
     with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as handle:
         handle.write(_PRELUDE + script)
@@ -38,12 +38,12 @@ def _run(script: str, python: str = BENCH_PYTHON) -> dict:
             cwd=ROOT,
             capture_output=True,
             text=True,
-            timeout=TIMEOUT,
+            timeout=timeout,
         )
     except FileNotFoundError:
         return {"error": f"측정용 인터프리터를 찾지 못했습니다: {python}. .env의 설정을 확인하라."}
     except subprocess.TimeoutExpired:
-        return {"error": f"{TIMEOUT}초 안에 끝나지 않아 중단했습니다."}
+        return {"error": f"{timeout}초 안에 끝나지 않아 중단했습니다."}
     finally:
         os.unlink(path)
 

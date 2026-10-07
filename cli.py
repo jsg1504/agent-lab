@@ -15,7 +15,7 @@ from agents import (
     build_researcher,
     build_reviewer,
 )
-from benchmarks import run_kernelbench
+from benchmarks import run_flashinfer_bench, run_kernelbench
 from llm import BASE_URL, MODEL, ConfigError
 from workflows import run_kernel_opt_oneshot, run_kernel_opt_orchestrator
 
@@ -110,6 +110,21 @@ def kernelbench() -> None:
     args = parser.parse_args()
     try:
         print(run_kernelbench(args.level, _ids(args.problems), args.workflow, args.request))
+    except ConfigError as exc:
+        sys.exit(str(exc))
+
+
+def flashinferbench() -> None:
+    parser = argparse.ArgumentParser(
+        prog="flashinferbench", description="FlashInfer-Bench definition에 워크플로를 돌리고 채점한다."
+    )
+    parser.add_argument("definitions", nargs="+", help="definition 이름이나 op_type. 예) rmsnorm_h4096 gemm")
+    parser.add_argument("--workflow", choices=["orchestrator", "oneshot"], default="orchestrator")
+    parser.add_argument("--request", default="", help="워크플로에 덧붙일 요청")
+    parser.add_argument("--max-workloads", type=int, default=8, help="definition마다 채점할 workload 수. 0이면 전부")
+    args = parser.parse_args()
+    try:
+        print(run_flashinfer_bench(args.definitions, args.workflow, args.request, args.max_workloads))
     except ConfigError as exc:
         sys.exit(str(exc))
 
