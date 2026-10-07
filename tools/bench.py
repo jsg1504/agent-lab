@@ -11,7 +11,8 @@ from langchain_core.tools import tool
 
 from tools.workspace import ROOT, resolve
 
-BENCH_PYTHON = os.getenv("BENCH_PYTHON", "python3")
+# .env의 값은 셸을 거치지 않으므로 ~를 직접 펼친다.
+BENCH_PYTHON = os.path.expanduser(os.getenv("BENCH_PYTHON") or "python3")
 TIMEOUT = 300
 WARMUP = 10
 

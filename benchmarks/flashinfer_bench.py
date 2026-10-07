@@ -21,7 +21,7 @@ from tools.workspace import ROOT
 load_dotenv()
 
 FLASHINFER_TRACE_ROOT = os.getenv("FLASHINFER_TRACE_ROOT")
-FLASHINFER_BENCH_PYTHON = os.getenv("FLASHINFER_BENCH_PYTHON") or BENCH_PYTHON
+FLASHINFER_BENCH_PYTHON = os.path.expanduser(os.getenv("FLASHINFER_BENCH_PYTHON") or BENCH_PYTHON)
 MAX_WORKLOADS = 8
 # workload 하나를 재는 데 넉넉히 잡은 시간(초). 채점 전체의 제한 시간을 workload 수에 맞춘다.
 SECONDS_PER_WORKLOAD = 60
@@ -163,7 +163,8 @@ def _header(definition: dict) -> str:
 
 
 def _prepare(names: list[str]) -> list[Problem]:
-    target_dir = ROOT / "flashinfer_bench"
+    # 디렉터리 이름이 flashinfer_bench면 측정용 인터프리터에 설치된 같은 이름의 패키지에 가려 임포트가 안 된다.
+    target_dir = ROOT / "fibench"
     target_dir.mkdir(parents=True, exist_ok=True)
     expanded = []
     for name in names:

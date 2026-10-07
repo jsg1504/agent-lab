@@ -168,7 +168,7 @@ uv run flashinferbench rmsnorm --workflow oneshot          # op_type 이름을 �
 uv run flashinferbench gemm_n4096_k4096 --max-workloads 0  # 그 definition의 workload를 전부 채점
 ```
 
-- 문제 하나가 definition 하나다. definition의 PyTorch 기준 구현이 `WORKSPACE_ROOT/flashinfer_bench/<definition>.py`로 만들어지고,
+- 문제 하나가 definition 하나다. definition의 PyTorch 기준 구현이 `WORKSPACE_ROOT/fibench/<definition>.py`로 만들어지고,
   파일 머리에 축과 입력·출력의 모양, dtype이 주석으로 붙는다. 같은 이름의 이전 후보는 실행 전에 지운다.
 - 후보는 원본처럼 `run` 함수가 출력을 반환하는 파이썬 파일이어야 한다. `import triton`이 있는 후보는 triton 솔루션으로 채점한다.
   C++/CUDA 솔루션은 채점하지 않는다.

@@ -18,7 +18,7 @@ from tools.workspace import ROOT
 load_dotenv()
 
 KERNELBENCH_ROOT = os.getenv("KERNELBENCH_ROOT")
-KERNELBENCH_PYTHON = os.getenv("KERNELBENCH_PYTHON") or BENCH_PYTHON
+KERNELBENCH_PYTHON = os.path.expanduser(os.getenv("KERNELBENCH_PYTHON") or BENCH_PYTHON)
 
 REQUEST = (
     "KernelBench 문제다. get_init_inputs()로 Model을 만들고 get_inputs()로 입력을 만든다. "
