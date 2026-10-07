@@ -199,4 +199,7 @@ def run_flashinfer_bench(
         raise ConfigError("필요한 설정이 없습니다: FLASHINFER_TRACE_ROOT. .env에 지정하라 (.env.example 참고).")
     problems = _prepare(names)
     score = partial(_score, max_workloads=max_workloads)
-    return run_suite("flashinfer_bench", problems, score, workflow, f"{REQUEST}\n{request}".strip())
+    # 오케스트레이터는 루프 안에서 같은 채점 함수를 부르고, 통과할 때까지 라운드를 돈다.
+    return run_suite(
+        "flashinfer_bench", problems, score, workflow, f"{REQUEST}\n{request}".strip(), score_in_loop=True
+    )

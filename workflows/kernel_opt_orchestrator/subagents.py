@@ -1,5 +1,9 @@
-"""하위 에이전트 3개(researcher, optimizer, evaluator)를 오케스트레이터가 부를 도구로 감싼다."""
+"""하위 에이전트 3개(researcher, optimizer, evaluator)를 오케스트레이터가 부를 도구로 감싼다.
 
+벤치마크가 공식 채점 함수를 넘기면 그것도 도구(official_score)로 감싼다.
+"""
+
+from collections.abc import Callable
 from itertools import count
 
 from langchain_core.tools import tool
@@ -18,7 +22,7 @@ def _delegate(agent, task: str, thread_id: str) -> str:
         return f"하위 에이전트가 실패했습니다: {type(exc).__name__}: {str(exc)[:500]}"
 
 
-def build_subagent_tools() -> list:
+def build_subagent_tools(official: Callable[[str], str] | None = None) -> list:
     researcher = build_researcher()
     optimizer = build_optimizer()
     evaluator = build_evaluator()
@@ -65,4 +69,20 @@ def build_subagent_tools() -> list:
         task = f"{kernel}이 원본, {candidate}이 최적화본이다. 입력은 {inputs}를 쓴다. 평가해줘."
         return _delegate(evaluator, task, f"evaluate-{next(calls)}")
 
-    return [research, optimize, evaluate]
+    if official is None:
+        return [research, optimize, evaluate]
+
+    @tool
+    def official_score(candidate: str) -> str:
+        """공식 채점기로 최적화본을 채점한다. 통과 여부와 속도향상, 실패했다면 그 이유를 받는다.
+
+        candidate는 최적화본 파일 경로다. 원본과 입력은 채점기가 알고 있으므로 넘기지 않는다.
+        evaluate가 통과해도 이 채점을 통과하지 못하면 실패다.
+        """
+        # 에이전트를 거치지 않고 채점 함수를 바로 부른다. 수치가 옮겨 적히다 바뀌지 않게 하기 위해서다.
+        try:
+            return official(candidate)
+        except Exception as exc:
+            return f"공식 채점이 실패했습니다: {type(exc).__name__}: {str(exc)[:500]}"
+
+    return [research, optimize, evaluate, official_score]

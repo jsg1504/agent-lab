@@ -9,12 +9,13 @@ import tempfile
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from functools import partial
 from datetime import datetime
 from pathlib import Path
 
 import tracing
 from tools import docs
-from tools.workspace import ROOT
+from tools.workspace import ROOT, resolve
 from workflows import run_kernel_opt_oneshot, run_kernel_opt_orchestrator
 
 WORKFLOWS = {
@@ -74,14 +75,37 @@ def _row(name: str, candidate: str, score: Score) -> str:
     return f"| {name} | {candidate} | {score.compiled} | {score.correct} | {speedup} | {reason} |"
 
 
+def _official(problem: Problem, score: Callable[[Path, Path], Score], candidate: str) -> str:
+    """루프 안에서 오케스트레이터가 부르는 공식 채점. 끝난 뒤의 채점과 같은 함수로 재고 결과를 글로 돌려준다."""
+    path = resolve(candidate)
+    if path is None or not path.is_file():
+        return f"후보 파일을 찾을 수 없습니다: {candidate}. 작업 루트 기준 경로로 다시 불러라."
+    result = score(problem.path, path)
+    verdict = "통과" if result.correct else "불통과"
+    speedup = f"{result.speedup:.3f}x (원본 대비)" if result.speedup is not None else "-"
+    lines = [
+        f"공식 채점: {verdict}",
+        f"컴파일: {result.compiled}, 정확: {result.correct}, 속도향상: {speedup}",
+    ]
+    if result.detail.strip():
+        lines.append(f"[상세]\n{result.detail.strip()[-1500:]}")
+    return "\n".join(lines)
+
+
 def run_suite(
     title: str,
     problems: list[Problem],
     score: Callable[[Path, Path], Score],
     workflow: str = "orchestrator",
     request: str = "",
+    score_in_loop: bool = False,
 ) -> str:
+    """score_in_loop이면 오케스트레이터가 루프 안에서 공식 채점을 부를 수 있다(orchestrator 워크플로만).
+
+    끝난 뒤의 채점과 집계는 그대로 한다. 보고서의 수치는 그쪽이 기준이다.
+    """
     run = WORKFLOWS[workflow]
+    in_loop = score_in_loop and workflow == "orchestrator"
     best: dict[str, Score | None] = {}
     rows, reports = [], []
     docs_hidden = False
@@ -92,7 +116,8 @@ def run_suite(
         tracing.mark("problem", name=problem.name, workflow=workflow)
         with _hidden_docs() as docs_hidden:
             try:
-                report = run(str(problem.path.relative_to(ROOT)), request)
+                extra = {"official_score": partial(_official, problem, score)} if in_loop else {}
+                report = run(str(problem.path.relative_to(ROOT)), request, **extra)
             except Exception as exc:
                 report = f"워크플로가 실패했습니다: {type(exc).__name__}: {str(exc)[:500]}"
         reports.append(f"## {problem.name}\n\n{report}")
@@ -111,6 +136,7 @@ def run_suite(
         f"# {title} ({workflow})",
         "",
         f"- 문제 수: {total}",
+        "- 루프 안 공식 채점: " + ("사용 (오케스트레이터가 official_score를 부를 수 있음)" if in_loop else "사용 안 함"),
         "- 로컬 문서: " + ("숨김 (DOCS_ROOT가 프로젝트나 작업 디렉터리와 겹침)" if docs_hidden else f"{docs.DOCS_ROOT}"),
         f"- 정확: {len(speedups)}/{total}",
         f"- fast_0 (정확): {len(speedups) / total:.2f}" if total else "- fast_0: -",
