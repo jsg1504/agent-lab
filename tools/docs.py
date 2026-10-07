@@ -5,6 +5,8 @@ from pathlib import Path
 
 from langchain_core.tools import tool
 
+from tools.paging import window
+
 DOCS_ROOT = Path(os.getenv("DOCS_ROOT", ".")).expanduser().resolve()
 SUFFIXES = {".md", ".txt", ".rst", ".py", ".toml", ".yaml", ".yml"}
 MAX_HITS = 20
@@ -48,12 +50,15 @@ def search_docs(query: str) -> str:
 
 
 @tool
-def read_doc(path: str) -> str:
-    """로컬 문서 파일의 내용을 읽는다. search_docs가 알려준 경로를 넣는다."""
+def read_doc(path: str, offset: int = 0) -> str:
+    """로컬 문서 파일의 내용을 읽는다. search_docs가 알려준 경로를 넣는다.
+
+    한 번에 4000자까지 돌려준다. 내용이 더 있으면 끝에 안내가 붙으니, 그 offset으로 다시 불러 이어 읽는다.
+    """
     target = (DOCS_ROOT / path).resolve()
     # 웹에서 가져온 내용이 경로를 지시할 수 있으므로 조사 범위를 벗어나지 못하게 한다.
     if not target.is_relative_to(DOCS_ROOT):
         return "조사 범위 밖의 경로입니다."
     if not target.is_file():
         return f"파일이 없습니다: {path}"
-    return target.read_text(errors="ignore")[:MAX_CHARS]
+    return window(target.read_text(errors="ignore"), offset, MAX_CHARS) or "파일이 비어 있습니다."

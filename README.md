@@ -76,8 +76,8 @@ WORKSPACE_ROOT=~/kernels uv run optimizer    # 대화형
 | --- | --- | --- |
 | `clock.py` | `get_current_time` | |
 | `files.py` | `list_files` | `WORKSPACE_ROOT` 제한 없이 아무 디렉터리나 본다 |
-| `web.py` | `web_search`, `fetch_page` | 외부 네트워크 필요. 검색 API 키는 필요 없다 |
-| `docs.py` | `list_docs`, `search_docs`, `read_doc` | `DOCS_ROOT` 아래만 본다 |
+| `web.py` | `web_search`, `fetch_page` | 외부 네트워크 필요. 검색 API 키는 필요 없다. `fetch_page`는 4000자씩 돌려주고 `offset`으로 이어 읽는다 |
+| `docs.py` | `list_docs`, `search_docs`, `read_doc` | `DOCS_ROOT` 아래만 본다. `read_doc`은 4000자씩 돌려주고 `offset`으로 이어 읽는다 |
 | `npu_wiki.py` | `search_wiki`, `read_wiki_page` | `NPU_WIKI_ROOT` 아래만 본다 |
 | `code.py` | `read_file`, `edit_file`, `write_file`, `list_dir`, `glob_files`, `grep_files` | `WORKSPACE_ROOT` 밖을 거부한다 |
 | `shell.py` | `run_command` | `WORKSPACE_ROOT`에서 실행하지만 **샌드박스가 아니다** |
@@ -397,6 +397,7 @@ benchmarks/
 tools/
   __init__.py       도구 목록 정의
   workspace.py      WORKSPACE_ROOT와 경로 봉쇄 (code/shell/bench 공용)
+  paging.py         긴 본문을 offset으로 나눠 읽는 공통 부분 (docs/web 공용)
   clock.py, files.py, web.py, docs.py, npu_wiki.py, code.py, shell.py, bench.py
 ```
 
@@ -417,9 +418,13 @@ tools/
 
 모델이 같은 도구를 같은 인자로 끝없이 다시 부르는 일이 있다. 대화가 계속 길어져 결국 엔드포인트의 컨텍스트 한도에서 오류로 끝난다.
 
+- **확인된 원인 하나**: `read_doc`과 `fetch_page`가 본문을 앞 4000자에서 말없이 잘랐고 뒤를 읽을 방법이 없었다.
+  모델은 뒷부분을 얻으려고 같은 문서를 수백 번 다시 불렀다(URL 끝에 `&x=1`, `&x=2`…를 붙여 가며 다시 받기도 했다).
+  지금은 잘린 곳과 전체 길이를 알려 주고 `offset`으로 이어 읽게 한다.
+
 - **알아보는 법**: [추적 로그](#추적-로그)에서 한 `ask`의 LLM 호출 수가 비정상적으로 많고 도구 호출이 같은 것만 이어진다.
 - **막아 둔 곳**: researcher는 40스텝(도구 호출 20번쯤)을 넘으면 중단한다. 명령으로 쓰면 중단했다는 안내가 나오고,
   오케스트레이터 워크플로에서는 실패가 답으로 돌아가 루프가 이어지며, 단발 워크플로는 조사 단계에서 실패로 끝난다.
-- **해결**: 한도는 호출이 쌓이는 것만 막는다. 조사 결과를 얻으려면 `OPENAI_MODEL`로 다른 모델을 쓴다.
+- **해결**: 한도는 호출이 쌓이는 것만 막는다. 추적 로그에서 되풀이된 호출의 결과가 매번 같은지 먼저 본다. 같다면 도구가 모델이 원하는 것을 주지 못하는 것이다. 도구 쪽 원인이 없으면 `OPENAI_MODEL`로 다른 모델을 쓴다.
 
 모든 모델에서 생기는 문제는 아니다. 관측한 조건과 횟수는 [실험 기록](#도구-구성에-따른-빈-응답-qwen359b)에 있다.
