@@ -117,8 +117,8 @@ DMA 엔진은 DRAM과 온칩 SRAM 사이 블록 전송을 맡는다. ...
 워크플로를 벤치마크 문제 여러 개에 돌리고, 끝난 뒤 공식 채점기로 후보(`<문제>_opt*`)를 모두 채점해 집계한다.
 기본은 채점을 하네스만 하고 **에이전트는 공식 채점기를 모르는** 것이다. 에이전트의 도구와 프롬프트가 그대로라 워크플로끼리, 모델끼리 같은 잣대로 비교할 수 있다.
 
-예외로 **FlashInfer-Bench를 오케스트레이터 워크플로로 돌릴 때는 채점이 루프 안에도 들어간다.** 오케스트레이터가 `official_score` 도구로 같은 채점을 부르고,
-통과하지 못하면 고쳐서 다시 돈다([워크플로 문서](workflows/kernel_opt_orchestrator/README.md#루프-안-공식-채점)).
+예외로 **FlashInfer-Bench를 오케스트레이터 워크플로로 돌릴 때는 채점이 루프 안에도 들어간다.** 오케스트레이터가 라운드마다 `official_score` 도구로 같은 채점을 부르고,
+그 결과를 보고 고쳐서 다시 돈다([워크플로 문서](workflows/kernel_opt_orchestrator/README.md#루프-안-공식-채점)).
 보고서의 "루프 안 공식 채점" 줄에 어느 쪽이었는지 남는다. 두 방식의 결과는 조건이 달라 나란히 비교하지 않는다.
 
 벤치마크가 도는 동안에는 `DOCS_ROOT`가 이 프로젝트나 `WORKSPACE_ROOT`와 겹치면(기본값이 그렇다) researcher의 로컬 문서 조사를 빈 디렉터리로 돌린다.
@@ -183,7 +183,7 @@ uv run flashinferbench gemm_n4096_k4096 --max-workloads 0  # 그 definition의 w
 - definition마다 workload를 `--max-workloads`개(기본 8, `0`이면 전부) 고르게 골라 잰다.
   후보가 **고른 workload를 모두 통과해야** 정확한 것으로 치고, 속도향상은 workload별 속도향상(기준 구현 대비)의 기하평균이다.
 - 지표는 KernelBench와 같고 definition 단위다. FlashInfer-Bench 논문의 `fast_p`는 workload 단위라 값이 다르다.
-- `--workflow orchestrator`(기본)에서는 오케스트레이터가 루프 안에서 같은 채점(`--max-workloads`도 같음)을 부르고, 통과할 때까지 최대 3라운드를 돈다.
+- `--workflow orchestrator`(기본)에서는 오케스트레이터가 루프 안에서 같은 채점(`--max-workloads`도 같음)을 부르며 3라운드를 모두 돈다. 통과한 뒤에도 남은 라운드에서 더 빠른 후보를 노린다.
   끝난 뒤의 채점은 그대로 다시 하고, 보고서의 수치는 그쪽이 기준이다. `--workflow oneshot`에는 루프가 없어 해당하지 않는다.
 - 결과는 화면에 요약과 후보별 채점 표로 나오고, 워크플로 보고 원문까지 담은 보고서가 `WORKSPACE_ROOT/benchmarks/`에 남는다.
 - 이 커밋의 레벨 1 문제는 입력이 수 GiB인 것이 많다. GPU 메모리가 작으면 OOM으로 실패로 채점된다.
