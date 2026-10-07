@@ -3,6 +3,8 @@
 import argparse
 import sys
 
+from langgraph.errors import GraphRecursionError
+
 from agents import (
     ask,
     build_agent,
@@ -20,13 +22,20 @@ from llm import BASE_URL, MODEL, ConfigError
 from workflows import run_kernel_opt_oneshot, run_kernel_opt_orchestrator
 
 
+def _ask(agent, question: str) -> str:
+    try:
+        return ask(agent, question)
+    except GraphRecursionError:
+        return "스텝 한도에 걸려 중단했다. 모델이 도구 호출을 되풀이했을 수 있다. 추적 로그를 확인하라."
+
+
 def _run(build, label: str) -> None:
     try:
         agent = build()
     except ConfigError as exc:
         sys.exit(str(exc))
     if len(sys.argv) > 1:
-        print(ask(agent, " ".join(sys.argv[1:])))
+        print(_ask(agent, " ".join(sys.argv[1:])))
         return
     print(f"{label} | model={MODEL} @ {BASE_URL}  (종료: Ctrl-D)")
     while True:
@@ -35,7 +44,7 @@ def _run(build, label: str) -> None:
         except EOFError:
             break
         if question:
-            print(ask(agent, question))
+            print(_ask(agent, question))
 
 
 def main() -> None:
