@@ -87,16 +87,28 @@ def _wrap_up(agent, config: dict) -> str:
     return f"{WRAP_UP_NOTE}\n\n{text}"
 
 
+TRUNCATED = (
+    "모델의 응답이 출력 한도에 걸려 추론 도중 끊겼다. 답도 도구 호출도 나오지 않았다. "
+    "일을 더 작게 나누거나 지시를 구체적으로 고쳐 다시 시도하라."
+)
+TRUNCATED_NOTE = "(출력 한도에 걸려 답이 중간에서 끊겼다.)"
+
+
 def _answer(messages: list) -> str:
-    answer = _clean(str(messages[-1].content))
+    last = messages[-1]
+    # 출력 한도에 걸린 응답은 "할 말이 없어 끝낸 것"과 원인이 다르다. 부른 쪽이 대응할 수 있게 구분해 알린다.
+    truncated = getattr(last, "response_metadata", {}).get("finish_reason") == "length"
+    answer = _clean(str(last.content))
     if answer:
-        return answer
+        return f"{answer}\n\n{TRUNCATED_NOTE}" if truncated else answer
     # 작은 모델은 도구를 다 쓰고도 마무리 문장 없이 끝낼 때가 있다. 한 일이라도 보여준다.
     steps = [
         f"- {m.name}: {str(m.content).strip()[:200]}"
         for m in _current_turn(messages)
         if isinstance(m, ToolMessage)
     ]
+    if truncated:
+        return TRUNCATED + ("\n그 전에 실행한 도구:\n" + "\n".join(steps) if steps else "")
     if steps:
         return "모델이 마무리 답변을 내놓지 않았다. 실행한 도구:\n" + "\n".join(steps)
     return "모델이 빈 답을 냈다."
