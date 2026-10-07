@@ -13,6 +13,12 @@ MAX_HITS = 20
 MAX_CHARS = 4000
 
 
+def set_root(path: Path) -> None:
+    """조사 범위를 바꾼다. 벤치마크가 에이전트에게 프로젝트와 작업 디렉터리를 숨길 때 쓴다."""
+    global DOCS_ROOT
+    DOCS_ROOT = Path(path).expanduser().resolve()
+
+
 def _walk() -> list[Path]:
     return sorted(
         p

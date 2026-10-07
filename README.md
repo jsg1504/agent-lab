@@ -117,6 +117,10 @@ DMA 엔진은 DRAM과 온칩 SRAM 사이 블록 전송을 맡는다. ...
 워크플로를 벤치마크 문제 여러 개에 돌리고, 끝난 뒤 공식 채점기로 후보(`<문제>_opt*`)를 모두 채점해 집계한다.
 채점은 하네스가 하고 **에이전트는 공식 채점기를 모른다**. 에이전트의 도구와 프롬프트가 그대로라 워크플로끼리, 모델끼리 같은 잣대로 비교할 수 있다.
 
+벤치마크가 도는 동안에는 `DOCS_ROOT`가 이 프로젝트나 `WORKSPACE_ROOT`와 겹치면(기본값이 그렇다) researcher의 로컬 문서 조사를 빈 디렉터리로 돌린다.
+채점 어댑터, 이전 보고서, 다른 실행의 후보를 읽지 못하게 하기 위해서다. 참고 자료를 주려면 두 곳과 겹치지 않는 디렉터리를 `DOCS_ROOT`로 지정한다.
+어느 쪽이었는지는 보고서의 "로컬 문서" 줄에 남는다.
+
 | 벤치마크 | 실행 |
 | --- | --- |
 | [KernelBench](https://github.com/ScalingIntelligence/KernelBench) | `uv run kernelbench <레벨> <문제 번호...> [--workflow orchestrator\|oneshot] [--request "..."]` |
@@ -335,7 +339,7 @@ cp .env.example .env
 | `OPENAI_BASE_URL` | (필수) | OpenAI 호환 엔드포인트 |
 | `OPENAI_MODEL` | (필수) | 모델 이름 |
 | `OPENAI_API_KEY` | (없음) | 인증이 필요한 서버에서만 지정한다. 비워 두면 자리 표시자가 들어간다 |
-| `DOCS_ROOT` | `.` | researcher가 조사할 로컬 디렉터리 |
+| `DOCS_ROOT` | `.` | researcher가 조사할 로컬 디렉터리. 벤치마크에서는 프로젝트나 `WORKSPACE_ROOT`와 겹치면 쓰지 않는다([벤치마크](#벤치마크)) |
 | `NPU_WIKI_ROOT` | (없음) | npu-researcher가 조사할 NPU wiki 디렉터리. `uv run npu-researcher`에만 필요하다 |
 | `WORKSPACE_ROOT` | 프로젝트의 `workspace/` | 지정하지 않으면 이 디렉터리를 만들어 쓴다(git에는 올리지 않는다). coder와 optimizer가 파일을 고치고 명령을 실행할 디렉터리. evaluator, planner, reviewer, debugger도 이 아래를 읽는다 |
 | `BENCH_PYTHON` | `python3` | evaluator가 측정을 돌릴 파이썬. torch가 있어야 한다 |

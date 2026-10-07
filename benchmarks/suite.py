@@ -5,12 +5,15 @@
 """
 
 import math
-from collections.abc import Callable
+import tempfile
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 import tracing
+from tools import docs
 from tools.workspace import ROOT
 from workflows import run_kernel_opt_oneshot, run_kernel_opt_orchestrator
 
@@ -38,6 +41,28 @@ class Score:
     detail: str = ""
 
 
+PROJECT = Path(__file__).resolve().parent.parent
+
+
+@contextmanager
+def _hidden_docs() -> Iterator[bool]:
+    """DOCS_ROOT가 프로젝트나 작업 디렉터리와 겹치면 워크플로가 도는 동안 빈 디렉터리로 바꾼다.
+
+    겹친 채로 두면 researcher가 채점 어댑터, 이전 보고서, 다른 실행의 후보를 읽을 수 있다.
+    겹치지 않는 DOCS_ROOT는 사용자가 일부러 준 참고 자료이므로 그대로 둔다.
+    """
+    original = docs.DOCS_ROOT
+    if not any(original.is_relative_to(p) or p.is_relative_to(original) for p in (PROJECT, ROOT)):
+        yield False
+        return
+    with tempfile.TemporaryDirectory(prefix="agent-lab-docs-") as empty:
+        docs.set_root(Path(empty))
+        try:
+            yield True
+        finally:
+            docs.set_root(original)
+
+
 def _candidates(problem: Problem) -> list[Path]:
     return sorted(problem.path.parent.glob(f"{problem.name}_opt*{problem.path.suffix}"))
 
@@ -59,15 +84,17 @@ def run_suite(
     run = WORKFLOWS[workflow]
     best: dict[str, Score | None] = {}
     rows, reports = [], []
+    docs_hidden = False
     for problem in problems:
         # 앞 실행이 남긴 후보가 이번 채점에 섞이지 않게 지운다.
         for old in _candidates(problem):
             old.unlink()
         tracing.mark("problem", name=problem.name, workflow=workflow)
-        try:
-            report = run(str(problem.path.relative_to(ROOT)), request)
-        except Exception as exc:
-            report = f"워크플로가 실패했습니다: {type(exc).__name__}: {str(exc)[:500]}"
+        with _hidden_docs() as docs_hidden:
+            try:
+                report = run(str(problem.path.relative_to(ROOT)), request)
+            except Exception as exc:
+                report = f"워크플로가 실패했습니다: {type(exc).__name__}: {str(exc)[:500]}"
         reports.append(f"## {problem.name}\n\n{report}")
 
         scores = [(path, score(problem.path, path)) for path in _candidates(problem)]
@@ -84,6 +111,7 @@ def run_suite(
         f"# {title} ({workflow})",
         "",
         f"- 문제 수: {total}",
+        "- 로컬 문서: " + ("숨김 (DOCS_ROOT가 프로젝트나 작업 디렉터리와 겹침)" if docs_hidden else f"{docs.DOCS_ROOT}"),
         f"- 정확: {len(speedups)}/{total}",
         f"- fast_0 (정확): {len(speedups) / total:.2f}" if total else "- fast_0: -",
         f"- fast_1 (정확하고 더 빠름): {sum(x > 1 for x in speedups) / total:.2f}" if total else "- fast_1: -",
