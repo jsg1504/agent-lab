@@ -20,6 +20,8 @@ def run_command(command: str) -> str:
             cwd=ROOT,
             capture_output=True,
             text=True,
+            # 출력이 UTF-8이 아닐 수 있다(바이너리, 글자 중간에서 잘린 tail -c). 깨진 바이트만 바꿔 읽는다.
+            errors="replace",
             timeout=TIMEOUT,
         )
     except subprocess.TimeoutExpired:
