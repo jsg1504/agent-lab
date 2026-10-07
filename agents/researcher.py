@@ -11,10 +11,10 @@ SYSTEM_PROMPT = """너는 조사 담당이다. 추측하지 말고 도구로 확
 - 확인하지 못한 것은 모른다고 말한다. 지어내지 않는다.
 - 한국어로 간결하게 답한다."""
 
-# 모델이 같은 도구 호출을 끝없이 되풀이할 때의 안전장치. 도구 호출 한 번이 2스텝이다.
+# 모델이 스스로 멈추지 않을 때의 안전장치. 도구 호출 한 번이 2스텝이다.
+# 한도에 닿으면 ask()가 그때까지 읽은 내용으로 마무리 답을 받는다. 한도를 올려도 모델은 끝까지 읽기만 했다.
 RECURSION_LIMIT = 40
 
 
 def build_researcher():
-    agent = build(SYSTEM_PROMPT, RESEARCH_TOOLS, name="researcher")
-    return agent.with_config(recursion_limit=RECURSION_LIMIT)
+    return build(SYSTEM_PROMPT, RESEARCH_TOOLS, name="researcher", recursion_limit=RECURSION_LIMIT)
